@@ -1,0 +1,27 @@
+# Terraform Variables Example
+# Copy this file to terraform.tfvars and customize with your values
+# DO NOT commit terraform.tfvars to version control
+
+# GCP Project Configuration
+gcp_project_id = "your-gcp-project-id"
+gcp_region     = "us-central1"
+gcp_zone       = "us-central1-a"
+
+# VM Configuration
+vm_count        = 2
+vm_machine_type = "e2-medium"
+ubuntu_image    = "ubuntu-os-cloud/ubuntu-2204-lts"
+
+# Vault Configuration
+vault_addr              = "https://vault.example.com:8200"
+vault_gcp_secret_path   = "secret/gcp/service-account"
+vault_aap_token_path    = "secret/aap/api-token"
+vault_ssh_key_path      = "secret/ssh/ubuntu-key"
+
+# AAP Configuration
+aap_api_url          = "https://aap.example.com"
+aap_job_template_id  = 1
+
+# Resource Tagging
+environment = "demo"
+managed_by  = "terraform"

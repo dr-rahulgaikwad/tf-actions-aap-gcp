@@ -35,3 +35,52 @@ override.tf.json
 # Ignore CLI configuration files
 .terraformrc
 terraform.rc
+
+# Ansible specific
+*.retry
+ansible/.vault_pass
+ansible/vault_password
+
+# Python testing
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.hypothesis/
+*.cover
+.coverage
+htmlcov/
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Sensitive files - credentials and keys
+*.pem
+*.key
+*.json
+!terraform.tfvars.example
+service-account*.json
+credentials.json
+
+# Terraform plan files
+*.tfplan
+tfplan
+
+# Logs
+*.log
+
+# Temporary files
+*.tmp
+.temp/
+tmp/
