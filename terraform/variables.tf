@@ -5,6 +5,7 @@
 variable "gcp_project_id" {
   description = "GCP project identifier where resources will be provisioned"
   type        = string
+  default     = "hc-d3e91b0ff2b242c8a4e8a587a25"
 }
 
 variable "gcp_region" {
@@ -24,7 +25,7 @@ variable "vm_count" {
   description = "Number of Ubuntu VMs to provision"
   type        = number
   default     = 2
-  
+
   validation {
     condition     = var.vm_count > 0 && var.vm_count <= 10
     error_message = "VM count must be between 1 and 10"

@@ -1,0 +1,5 @@
+# Python dependencies for property-based testing
+# Testing framework: Hypothesis (as specified in design document)
+
+pytest>=7.4.0
+hypothesis>=6.92.0

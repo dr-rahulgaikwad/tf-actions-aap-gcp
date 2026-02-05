@@ -12,21 +12,21 @@ terraform {
   #
   # For local testing/validation, you can comment out this block and use
   # the local backend configuration from backend-local.tf.example
-  
-  # cloud {
-  #   organization = "REPLACE_WITH_YOUR_ORG"
-  #   
-  #   workspaces {
-  #     name = "gcp-patching-demo"
-  #   }
-  # }
+
+  cloud {
+    organization = "rahul-tfc"
+
+    workspaces {
+      name = "tf-actions-aap-gcp"
+    }
+  }
 
   required_providers {
     google = {
       source  = "hashicorp/google"
       version = "~> 5.0"
     }
-    
+
     vault = {
       source  = "hashicorp/vault"
       version = "~> 4.0"
@@ -43,10 +43,11 @@ provider "vault" {
 }
 
 # Google Cloud provider configuration
-# Will be configured with Vault-retrieved credentials in subsequent tasks
+# Authenticates to GCP using service account credentials retrieved from Vault
+# Requirements: 6.2, 8.1
 provider "google" {
-  project = var.gcp_project_id
-  region  = var.gcp_region
-  zone    = var.gcp_zone
-  # Credentials will be configured using Vault data source
+  credentials = data.vault_generic_secret.gcp_credentials.data["key"]
+  project     = var.gcp_project_id
+  region      = var.gcp_region
+  zone        = var.gcp_zone
 }
