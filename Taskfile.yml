@@ -1,0 +1,197 @@
+version: '3'
+
+vars:
+  TERRAFORM_DIR: terraform
+  TESTS_DIR: tests
+
+tasks:
+  setup:
+    desc: "Complete setup - GCP, Vault, and Terraform"
+    cmds:
+      - task: check-prereqs
+      - echo ""
+      - echo "Run these tasks in order:"
+      - echo "  1. task gcp-setup       - Configure GCP service account"
+      - echo "  2. task gcp-create-key  - Create and store key in Vault"
+      - echo "  3. task vault-setup     - Store AAP and SSH credentials"
+      - echo "  4. task vault-verify    - Verify all secrets"
+      - echo "  5. task tf-init         - Initialize Terraform"
+
+  gcp-setup:
+    desc: "Setup GCP service account with required permissions"
+    cmds:
+      - |
+        export PROJECT_ID="${PROJECT_ID:-hc-4faa1ac49a5e46ecb46cfe87b37}"
+        export SA_NAME="terraform-automation"
+        export SA_EMAIL="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
+        
+        echo "=== GCP Service Account Setup ==="
+        echo "Project: ${PROJECT_ID}"
+        echo "Service Account: ${SA_EMAIL}"
+        echo ""
+        
+        gcloud config set project "${PROJECT_ID}"
+        
+        echo "Enabling APIs..."
+        gcloud services enable compute.googleapis.com osconfig.googleapis.com iam.googleapis.com
+        
+        echo "Creating service account..."
+        gcloud iam service-accounts create "${SA_NAME}" \
+          --display-name="Terraform Automation" 2>/dev/null || echo "Already exists"
+        
+        echo "Granting IAM roles..."
+        for role in compute.instanceAdmin.v1 compute.networkAdmin compute.securityAdmin osconfig.patchDeploymentAdmin iam.serviceAccountUser; do
+          gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+            --member="serviceAccount:${SA_EMAIL}" \
+            --role="roles/${role}" --condition=None --quiet
+        done
+        
+        echo ""
+        echo "✓ GCP service account configured"
+        echo "Next: task gcp-create-key"
+    preconditions:
+      - sh: command -v gcloud
+        msg: "gcloud CLI not found"
+
+  gcp-create-key:
+    desc: "Create service account key and store in Vault"
+    cmds:
+      - |
+        export PROJECT_ID="${PROJECT_ID:-hc-4faa1ac49a5e46ecb46cfe87b37}"
+        export SA_EMAIL="terraform-automation@${PROJECT_ID}.iam.gserviceaccount.com"
+        export KEY_FILE="terraform-sa-key.json"
+        
+        echo "Creating key..."
+        gcloud iam service-accounts keys create "${KEY_FILE}" --iam-account="${SA_EMAIL}"
+        
+        echo "Storing in Vault..."
+        vault kv put secret/gcp/service-account @"${KEY_FILE}"
+        
+        echo "Verifying..."
+        vault kv get secret/gcp/service-account | grep project_id
+        
+        rm "${KEY_FILE}"
+        echo "✓ Key stored in Vault and local file deleted"
+    preconditions:
+      - sh: command -v vault && vault status
+        msg: "Vault CLI not found or cannot connect"
+
+  vault-setup:
+    desc: "Guide for storing AAP and SSH credentials in Vault"
+    cmds:
+      - echo "=== Vault Secrets Setup ==="
+      - echo ""
+      - echo "Store these secrets in Vault"
+      - echo ""
+      - echo "1. AAP API Token"
+      - echo "   vault kv put secret/aap/api-token token=YOUR_TOKEN"
+      - echo ""
+      - echo "2. SSH Keys"
+      - echo "   ssh-keygen -t rsa -b 4096 -f ~/.ssh/ubuntu-patching -N ''"
+      - echo "   vault kv put secret/ssh/ubuntu-key private_key=@~/.ssh/ubuntu-patching public_key=@~/.ssh/ubuntu-patching.pub"
+      - echo ""
+      - echo "Then verify with task vault-verify"
+
+  vault-verify:
+    desc: "Verify all Vault secrets are configured"
+    cmds:
+      - echo "=== Verifying Vault Secrets ==="
+      - echo ""
+      - echo "GCP Service Account:"
+      - vault kv get secret/gcp/service-account | grep project_id || echo "  Not found"
+      - echo ""
+      - echo "AAP API Token:"
+      - vault kv get secret/aap/api-token | grep token || echo "  Not found"
+      - echo ""
+      - echo "SSH Keys:"
+      - vault kv get secret/ssh/ubuntu-key | grep private_key || echo "  Not found"
+      - echo ""
+
+  tf-init:
+    desc: "Initialize Terraform"
+    dir: "{{.TERRAFORM_DIR}}"
+    cmds:
+      - terraform init
+
+  tf-validate:
+    desc: "Validate and format Terraform"
+    dir: "{{.TERRAFORM_DIR}}"
+    deps:
+      - tf-init
+    cmds:
+      - terraform fmt -recursive
+      - terraform validate
+
+  tf-plan:
+    desc: "Run Terraform plan (local)"
+    dir: "{{.TERRAFORM_DIR}}"
+    cmds:
+      - terraform plan
+
+  tf-clean:
+    desc: "Clean Terraform temporary files"
+    dir: "{{.TERRAFORM_DIR}}"
+    cmds:
+      - rm -rf .terraform .terraform.lock.hcl
+      - echo "✓ Cleaned"
+
+  test:
+    desc: "Run all tests"
+    cmds:
+      - task: test-terraform
+      - task: test-ansible
+      - task: test-python
+
+  test-terraform:
+    desc: "Validate Terraform"
+    dir: "{{.TESTS_DIR}}"
+    cmds:
+      - chmod +x validate_terraform.sh
+      - ./validate_terraform.sh
+
+  test-ansible:
+    desc: "Validate Ansible playbooks"
+    dir: "{{.TESTS_DIR}}"
+    cmds:
+      - chmod +x validate_ansible.sh
+      - ./validate_ansible.sh
+
+  test-python:
+    desc: "Run property-based tests"
+    dir: "{{.TESTS_DIR}}"
+    cmds:
+      - |
+        if [ ! -d "venv" ]; then
+          python3 -m venv venv
+          ./venv/bin/pip install -q -r requirements.txt
+        fi
+        ./venv/bin/pytest -v
+    preconditions:
+      - sh: command -v python3
+        msg: "Python 3 not found"
+
+  clean:
+    desc: "Clean all temporary files"
+    cmds:
+      - task: tf-clean
+      - rm -rf {{.TESTS_DIR}}/__pycache__ {{.TESTS_DIR}}/.pytest_cache {{.TESTS_DIR}}/.hypothesis {{.TESTS_DIR}}/venv
+      - echo "✓ All temporary files cleaned"
+
+  check-prereqs:
+    desc: "Check prerequisites"
+    cmds:
+      - echo "Checking prerequisites..."
+      - |
+        for cmd in gcloud terraform vault python3 git; do
+          echo -n "  $cmd: "
+          command -v $cmd >/dev/null 2>&1 && echo "✓" || echo "✗"
+        done
+
+  help:
+    desc: "Show available tasks"
+    cmds:
+      - task --list
+
+  default:
+    cmds:
+      - task: help
