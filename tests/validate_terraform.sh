@@ -45,8 +45,12 @@ if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
     exit 0
 fi
 
+# Get script directory and project root
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
 # Default terraform directory
-TERRAFORM_DIR="${1:-terraform}"
+TERRAFORM_DIR="${1:-$PROJECT_ROOT/terraform}"
 
 echo "=========================================="
 echo "Terraform Validation Script"

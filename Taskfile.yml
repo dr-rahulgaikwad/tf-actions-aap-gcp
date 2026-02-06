@@ -15,11 +15,11 @@ tasks:
       - task: check-prereqs
       - echo ""
       - echo "Run these tasks in order:"
-      - echo "  1. task gcp-setup       # Configure GCP service account"
-      - echo "  2. task gcp-create-key  # Create and store key in Vault"
-      - echo "  3. task vault-setup     # Store AAP and SSH credentials"
-      - echo "  4. task vault-verify    # Verify all secrets"
-      - echo "  5. task tf-init         # Initialize Terraform"
+      - echo "  1. task gcp-setup       - Configure GCP service account"
+      - echo "  2. task gcp-create-key  - Create and store key in Vault"
+      - echo "  3. task vault-setup     - Store AAP and SSH credentials"
+      - echo "  4. task vault-verify    - Verify all secrets"
+      - echo "  5. task tf-init         - Initialize Terraform"
 
   gcp-setup:
     desc: "Setup GCP service account with required permissions"

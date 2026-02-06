@@ -1,21 +1,20 @@
 # Terraform Variables
-# Define all input variables for the GCP patching prototype
 
-# GCP Project Configuration
+# GCP Configuration
 variable "gcp_project_id" {
-  description = "GCP project identifier where resources will be provisioned"
+  description = "GCP project identifier"
   type        = string
   default     = "hc-d3e91b0ff2b242c8a4e8a587a25"
 }
 
 variable "gcp_region" {
-  description = "GCP region for resource deployment (e.g., us-central1)"
+  description = "GCP region for resource deployment"
   type        = string
   default     = "us-central1"
 }
 
 variable "gcp_zone" {
-  description = "GCP zone for VM deployment (e.g., us-central1-a)"
+  description = "GCP zone for VM deployment"
   type        = string
   default     = "us-central1-a"
 }
@@ -33,7 +32,7 @@ variable "vm_count" {
 }
 
 variable "vm_machine_type" {
-  description = "GCP machine type for VMs (e.g., e2-medium)"
+  description = "GCP machine type for VMs"
   type        = string
   default     = "e2-medium"
 }
@@ -46,12 +45,12 @@ variable "ubuntu_image" {
 
 # Vault Configuration
 variable "vault_addr" {
-  description = "Vault server address for credential retrieval"
+  description = "Vault server address"
   type        = string
 }
 
 variable "vault_token" {
-  description = "Vault authentication token (optional - can also use VAULT_TOKEN env var)"
+  description = "Vault authentication token (optional - can use VAULT_TOKEN env var)"
   type        = string
   default     = ""
   sensitive   = true
@@ -94,7 +93,7 @@ variable "aap_job_template_id" {
 
 # Resource Tagging
 variable "environment" {
-  description = "Environment label for resources (e.g., demo, dev, prod)"
+  description = "Environment label for resources"
   type        = string
   default     = "demo"
 }
