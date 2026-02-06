@@ -2,10 +2,6 @@
 
 **Production-ready solution for automating VM patching using Terraform Actions, Ansible Automation Platform, and HashiCorp Vault**
 
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Terraform](https://img.shields.io/badge/terraform-%3E%3D1.7.0-623CE4)](https://www.terraform.io/)
-[![Ansible](https://img.shields.io/badge/ansible-%3E%3D2.9-EE0000)](https://www.ansible.com/)
-
 ## Overview
 
 This solution demonstrates how to bridge Infrastructure as Code (IaC) with Day-2 operations by using **Terraform Actions** to trigger **Ansible Automation Platform** jobs for automated VM patching. All credentials are securely managed through **HashiCorp Vault**.
