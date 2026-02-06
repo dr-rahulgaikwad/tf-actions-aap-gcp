@@ -50,43 +50,7 @@ output "patch_deployment_id" {
 # ============================================================================
 # Terraform Actions Outputs
 # ============================================================================
-# These outputs provide action configuration data for HCP Terraform Actions
+# These outputs have been moved to actions.tf for better organization
+# See actions.tf for action configuration data and outputs
 # Requirements: 3.1, 3.2, 3.3, 3.5
 
-# Output AAP API endpoint URL
-# Used by Terraform Actions to trigger AAP job templates
-output "aap_job_launch_url" {
-  description = "AAP API endpoint for job template launch"
-  value       = local.aap_job_launch_url
-}
-
-# Output VM inventory in AAP-compatible format
-# Used by Terraform Actions to pass dynamic inventory to AAP
-output "vm_inventory_json" {
-  description = "VM inventory in JSON format for AAP job templates"
-  value       = jsonencode(local.vm_inventory)
-}
-
-# Output complete action payload
-# Used by Terraform Actions to construct the AAP API request
-output "action_payload_json" {
-  description = "Complete action payload for AAP job launch"
-  value       = jsonencode(local.action_payload)
-}
-
-# Output action configuration metadata
-# Used to configure Terraform Actions in HCP Terraform workspace
-output "action_config" {
-  description = "Action configuration metadata for HCP Terraform"
-  value = {
-    name         = local.action_config.name
-    display_name = local.action_config.display_name
-    description  = local.action_config.description
-    method       = local.action_config.method
-    url          = local.action_config.url
-  }
-  sensitive = false
-}
-
-# Note: The actual AAP auth token is not output for security reasons
-# It should be configured directly in HCP Terraform Actions using Vault integration

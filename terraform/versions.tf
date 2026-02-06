@@ -37,9 +37,13 @@ terraform {
 # Vault provider configuration
 # Authenticates to Vault for credential retrieval
 provider "vault" {
-  address = var.vault_addr
-  # Token should be provided via VAULT_TOKEN environment variable
-  # or other authentication method configured in HCP Terraform workspace
+  address   = var.vault_addr
+  token     = var.vault_token != "" ? var.vault_token : null
+  namespace = var.vault_namespace
+  # Token can be provided via:
+  # 1. var.vault_token (Terraform variable)
+  # 2. VAULT_TOKEN environment variable (in HCP Terraform workspace)
+  # 3. Other authentication methods configured in HCP Terraform workspace
 }
 
 # Google Cloud provider configuration

@@ -83,11 +83,12 @@ The `.gitignore` file is configured to exclude:
 
 ### Next Steps
 
-1. Configure HCP Terraform workspace
-2. Set up HashiCorp Vault with required secrets
-3. Configure GCP project and enable required APIs
-4. Set up Ansible Automation Platform
-5. Proceed with subsequent implementation tasks
+1. ✅ Project structure created
+2. ➡️ **Next:** [HCP Terraform Workspace Setup](HCP_TERRAFORM_SETUP.md)
+3. ➡️ **Next:** Set up HashiCorp Vault with required secrets
+4. ➡️ **Next:** [GCP Project Setup](GCP_SETUP.md)
+5. ➡️ **Next:** [AAP Setup](AAP_SETUP.md)
+6. ➡️ **Next:** Proceed with subsequent implementation tasks
 
 ### Validation
 

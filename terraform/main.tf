@@ -36,18 +36,19 @@ data "vault_generic_secret" "ssh_key" {
 # Configure VPC network and firewall rules for VM connectivity
 # Requirements: 1.2, 7.5
 
-# Use the default VPC network for simplicity
-# In production, you might create a custom VPC, but for this demo
-# we use the default network to minimize complexity
-data "google_compute_network" "default" {
-  name = "default"
+# Create or use the default VPC network
+# For demo purposes, we'll create the network if it doesn't exist
+resource "google_compute_network" "vpc_network" {
+  name                    = "patching-demo-network"
+  auto_create_subnetworks = true
+  description             = "VPC network for GCP patching demo"
 }
 
 # Firewall rule to allow SSH access to VMs
 # Requirement 7.5: Minimal firewall rules (SSH only)
 resource "google_compute_firewall" "allow_ssh" {
   name    = "allow-ssh-patching-demo"
-  network = data.google_compute_network.default.name
+  network = google_compute_network.vpc_network.name
 
   # Allow SSH from anywhere (for demo purposes)
   # In production, restrict source_ranges to specific IPs or ranges
@@ -91,8 +92,8 @@ resource "google_compute_instance" "ubuntu_vms" {
   # Network configuration
   # Requirement 1.2: Configure standard GCP networking
   network_interface {
-    # Use the default VPC network
-    network = data.google_compute_network.default.name
+    # Use the created VPC network
+    network = google_compute_network.vpc_network.name
 
     # Assign ephemeral external IP for SSH access
     # This allows Ansible to connect from AAP
@@ -153,8 +154,8 @@ resource "google_os_config_patch_deployment" "ubuntu_patches" {
   # Requirement 2.4: Specify patch categories and severity levels
   patch_config {
     apt {
-      type = "DIST" # Distribution upgrade (security patches)
-      excludes = []  # No package exclusions for demo
+      type     = "DIST" # Distribution upgrade (security patches)
+      excludes = []     # No package exclusions for demo
     }
 
     # Reboot configuration
@@ -176,67 +177,9 @@ resource "google_os_config_patch_deployment" "ubuntu_patches" {
 # Define Day 2 operations that trigger AAP workflows
 # Requirements: 3.1, 3.2, 3.3, 3.5
 #
-# NOTE: Terraform Actions is configured through HCP Terraform UI/API.
-# This section defines the data structures and outputs needed for Actions integration.
-# The actual action trigger is configured in the HCP Terraform workspace.
-
-# Local values for action configuration
-# These define the structure of the AAP API call that Terraform Actions will make
-locals {
-  # AAP API endpoint for job template launch
-  # Requirement 3.1: Integrate with AAP using API authentication
-  aap_job_launch_url = "${var.aap_api_url}/api/v2/job_templates/${var.aap_job_template_id}/launch/"
-
-  # Action authentication configuration
-  # Requirement 3.5: Use Vault Enterprise for storing AAP credentials
-  aap_auth_token = data.vault_generic_secret.aap_token.data["token"]
-
-  # VM inventory for AAP job template
-  # Requirement 3.3: Pass VM inventory data to AAP job templates
-  vm_inventory = {
-    all = {
-      hosts = {
-        for vm in google_compute_instance.ubuntu_vms : vm.name => {
-          ansible_host = vm.network_interface[0].access_config[0].nat_ip
-          instance_id  = vm.instance_id
-          internal_ip  = vm.network_interface[0].network_ip
-        }
-      }
-      vars = {
-        ansible_user            = "ubuntu"
-        gcp_project             = var.gcp_project_id
-        ansible_ssh_common_args = "-o StrictHostKeyChecking=no"
-      }
-    }
-  }
-
-  # Complete action payload for AAP job launch
-  # This is the JSON payload that will be sent to AAP API
-  action_payload = {
-    job_template_id = var.aap_job_template_id
-    inventory       = local.vm_inventory
-    extra_vars = {
-      patch_type     = "security"
-      reboot_allowed = true
-      environment    = var.environment
-    }
-  }
-
-  # Action configuration metadata
-  # This can be used to configure the action in HCP Terraform
-  action_config = {
-    name        = "patch_vms"
-    display_name = "Patch Ubuntu VMs"
-    description = "Trigger Ansible playbook to patch VMs via AAP"
-    method      = "POST"
-    url         = local.aap_job_launch_url
-    headers = {
-      "Content-Type"  = "application/json"
-      "Authorization" = "Bearer ${local.aap_auth_token}"
-    }
-    payload = jsonencode(local.action_payload)
-  }
-}
+# NOTE: Terraform Actions configuration has been moved to actions.tf
+# for better organization and maintainability. See actions.tf for the
+# complete action configuration including HTTP integration with AAP.
 
 # ============================================================================
 # IAM Configuration - Service Account Permissions

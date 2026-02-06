@@ -50,6 +50,19 @@ variable "vault_addr" {
   type        = string
 }
 
+variable "vault_token" {
+  description = "Vault authentication token (optional - can also use VAULT_TOKEN env var)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "vault_namespace" {
+  description = "Vault namespace (for HCP Vault, typically 'admin')"
+  type        = string
+  default     = "admin"
+}
+
 variable "vault_gcp_secret_path" {
   description = "Vault secret path for GCP service account credentials"
   type        = string
