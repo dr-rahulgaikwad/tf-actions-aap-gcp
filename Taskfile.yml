@@ -15,41 +15,157 @@ tasks:
   # ============================================================================
   
   setup:
-    desc: "Complete setup - bootstrap GCP, configure Vault, and initialize Terraform"
+    desc: "Complete setup - configure GCP service account, Vault, and Terraform"
     cmds:
-      - task: bootstrap-gcp
-      - task: setup-vault
+      - task: check-prereqs
+      - task: gcp-setup
+      - task: vault-setup
       - task: tf-init
+      - echo ""
+      - echo "✓ Setup complete! Next steps:"
+      - echo "  1. Verify Vault secrets: task vault-verify"
+      - echo "  2. Run Terraform plan: task tf-plan"
+      - echo "  3. Deploy: git add . && git commit && git push"
 
-  bootstrap-gcp:
-    desc: "Run GCP bootstrap script (one-time setup)"
-    dir: "{{.SCRIPTS_DIR}}"
+  gcp-setup:
+    desc: "Setup GCP service account with required permissions"
     cmds:
-      - chmod +x bootstrap-gcp.sh
-      - ./bootstrap-gcp.sh
+      - echo "=== GCP Service Account Setup ==="
+      - echo ""
+      - echo "Setting up service account: terraform-automation"
+      - |
+        export PROJECT_ID="${PROJECT_ID:-hc-4faa1ac49a5e46ecb46cfe87b37}"
+        export SA_NAME="terraform-automation"
+        export SA_EMAIL="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
+        
+        echo "Project: ${PROJECT_ID}"
+        echo "Service Account: ${SA_EMAIL}"
+        echo ""
+        
+        # Set project
+        gcloud config set project "${PROJECT_ID}"
+        
+        # Enable required APIs
+        echo "Enabling required GCP APIs..."
+        gcloud services enable compute.googleapis.com
+        gcloud services enable osconfig.googleapis.com
+        gcloud services enable iam.googleapis.com
+        
+        # Create service account if it doesn't exist
+        echo "Creating service account (if not exists)..."
+        gcloud iam service-accounts create "${SA_NAME}" \
+          --display-name="Terraform Automation Service Account" \
+          --description="Service account for Terraform to manage GCP resources" \
+          2>/dev/null || echo "Service account already exists"
+        
+        # Grant required roles
+        echo "Granting IAM roles..."
+        gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+          --member="serviceAccount:${SA_EMAIL}" \
+          --role="roles/compute.instanceAdmin.v1" \
+          --condition=None
+        
+        gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+          --member="serviceAccount:${SA_EMAIL}" \
+          --role="roles/compute.networkAdmin" \
+          --condition=None
+        
+        gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+          --member="serviceAccount:${SA_EMAIL}" \
+          --role="roles/compute.securityAdmin" \
+          --condition=None
+        
+        gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+          --member="serviceAccount:${SA_EMAIL}" \
+          --role="roles/osconfig.patchDeploymentAdmin" \
+          --condition=None
+        
+        gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+          --member="serviceAccount:${SA_EMAIL}" \
+          --role="roles/iam.serviceAccountUser" \
+          --condition=None
+        
+        echo ""
+        echo "✓ GCP service account configured"
+        echo ""
+        echo "Next: Create and store service account key in Vault"
+        echo "  task gcp-create-key"
     preconditions:
       - sh: command -v gcloud
         msg: "gcloud CLI not found. Install from https://cloud.google.com/sdk/docs/install"
 
-  setup-vault:
-    desc: "Interactive Vault setup - store GCP, AAP, and SSH credentials"
+  gcp-create-key:
+    desc: "Create service account key and store in Vault"
     cmds:
-      - echo "=== Vault Setup ==="
-      - echo "Checking Vault connectivity..."
+      - |
+        export PROJECT_ID="${PROJECT_ID:-hc-4faa1ac49a5e46ecb46cfe87b37}"
+        export SA_EMAIL="terraform-automation@${PROJECT_ID}.iam.gserviceaccount.com"
+        export KEY_FILE="terraform-sa-key.json"
+        
+        echo "Creating service account key..."
+        gcloud iam service-accounts keys create "${KEY_FILE}" \
+          --iam-account="${SA_EMAIL}"
+        
+        echo "Storing key in Vault..."
+        vault kv put secret/gcp/service-account @"${KEY_FILE}"
+        
+        echo "Verifying..."
+        vault kv get secret/gcp/service-account | grep project_id
+        
+        echo "Cleaning up local key..."
+        rm "${KEY_FILE}"
+        
+        echo ""
+        echo "✓ Service account key stored in Vault"
+    preconditions:
+      - sh: command -v vault
+        msg: "Vault CLI not found"
+      - sh: vault status
+        msg: "Cannot connect to Vault. Check VAULT_ADDR and VAULT_TOKEN"
+
+  vault-setup:
+    desc: "Setup Vault secrets (interactive guide)"
+    cmds:
+      - echo "=== Vault Secrets Setup ==="
+      - echo ""
       - vault status
       - echo ""
-      - echo "Storing credentials in Vault..."
-      - echo "1. GCP Service Account Key"
-      - echo "2. AAP API Token"
-      - echo "3. SSH Keys"
+      - echo "Required secrets:"
       - echo ""
-      - echo "Run these commands manually:"
-      - echo "  vault kv put secret/gcp/service-account key=@/path/to/sa-key.json project_id=PROJECT_ID"
-      - echo "  vault kv put secret/aap/api-token token=YOUR_AAP_TOKEN"
-      - echo "  vault kv put secret/ssh/ubuntu-key private_key=@~/.ssh/key public_key=@~/.ssh/key.pub"
+      - echo "1. GCP Service Account (if not done via gcp-create-key):"
+      - echo "   vault kv put secret/gcp/service-account @terraform-sa-key.json"
+      - echo ""
+      - echo "2. AAP API Token:"
+      - echo "   vault kv put secret/aap/api-token token=YOUR_AAP_TOKEN"
+      - echo ""
+      - echo "3. SSH Keys:"
+      - echo "   ssh-keygen -t rsa -b 4096 -f ~/.ssh/ubuntu-patching -N ''"
+      - echo "   vault kv put secret/ssh/ubuntu-key \\"
+      - echo "     private_key=@~/.ssh/ubuntu-patching \\"
+      - echo "     public_key=@~/.ssh/ubuntu-patching.pub"
+      - echo ""
+      - echo "Verify with: task vault-verify"
     preconditions:
       - sh: command -v vault
         msg: "Vault CLI not found. Install from https://www.vaultproject.io/downloads"
+
+  vault-verify:
+    desc: "Verify all Vault secrets are configured"
+    cmds:
+      - echo "=== Verifying Vault Secrets ==="
+      - echo ""
+      - echo "1. GCP Service Account:"
+      - vault kv get secret/gcp/service-account | grep -E "(project_id|client_email)" || echo "  ✗ Not found"
+      - echo ""
+      - echo "2. AAP API Token:"
+      - vault kv get secret/aap/api-token | grep token || echo "  ✗ Not found"
+      - echo ""
+      - echo "3. SSH Keys:"
+      - vault kv get secret/ssh/ubuntu-key | grep -E "(private_key|public_key)" || echo "  ✗ Not found"
+      - echo ""
+    preconditions:
+      - sh: command -v vault
+        msg: "Vault CLI not found"
 
   # ============================================================================
   # Terraform Tasks

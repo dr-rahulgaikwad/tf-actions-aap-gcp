@@ -1,293 +1,378 @@
-# Automated GCP Setup Guide
+# Automated Setup Guide
 
-This guide explains how to use the automated setup scripts to quickly configure GCP for the Terraform Actions patching prototype.
-
-## Overview
-
-The setup is split into two parts:
-
-1. **Manual Bootstrap** (one-time, ~5 minutes): Enable APIs and create initial service account
-2. **Terraform Automation** (repeatable): Create all other resources automatically
+This guide walks through the complete automated setup process using the Taskfile automation.
 
 ## Prerequisites
 
-- GCP account with billing enabled
-- `gcloud` CLI installed and configured
-- `vault` CLI installed (for credential storage)
-- Terraform >= 1.7.0
+### Required Tools
 
-## Quick Start
+Install these tools before starting:
 
-### Step 1: Run Bootstrap Script
+1. **gcloud CLI** - Google Cloud SDK
+   ```bash
+   # macOS
+   brew install google-cloud-sdk
+   
+   # Or download from: https://cloud.google.com/sdk/docs/install
+   ```
 
-This script performs the initial GCP setup that cannot be automated in Terraform:
+2. **Terraform** (>= 1.7.0)
+   ```bash
+   # macOS
+   brew install terraform
+   
+   # Or download from: https://www.terraform.io/downloads
+   ```
+
+3. **Vault CLI** - HashiCorp Vault
+   ```bash
+   # macOS
+   brew install vault
+   
+   # Or download from: https://www.vaultproject.io/downloads
+   ```
+
+4. **Task** - Task runner
+   ```bash
+   # macOS
+   brew install go-task/tap/go-task
+   
+   # Or see: https://taskfile.dev/installation/
+   ```
+
+5. **Python 3.8+**
+   ```bash
+   # macOS (usually pre-installed)
+   python3 --version
+   ```
+
+### Verify Prerequisites
+
+Check all tools are installed:
+```bash
+task check-prereqs
+```
+
+Expected output:
+```
+Checking prerequisites...
+  gcloud: ✓
+  terraform: ✓
+  vault: ✓
+  python3: ✓
+  git: ✓
+```
+
+## Setup Process
+
+### Step 1: Environment Configuration
+
+Set required environment variables:
 
 ```bash
-# Run the bootstrap script
-./scripts/bootstrap-gcp.sh
+# GCP Project ID
+export PROJECT_ID="your-gcp-project-id"
 
-# Follow the prompts:
-# - Enter your GCP Project ID
-# - Confirm Vault storage (recommended)
+# Vault Configuration
+export VAULT_ADDR="https://your-vault-cluster.vault.hashicorp.cloud:8200"
+export VAULT_TOKEN="your-vault-token"
+export VAULT_NAMESPACE="admin"  # For HCP Vault
 ```
 
-**What it does:**
-- ✅ Enables required GCP APIs (Compute, OS Config, IAM)
-- ✅ Creates Terraform service account
-- ✅ Grants necessary IAM roles
-- ✅ Creates and downloads service account key
-- ✅ Stores credentials in Vault (optional)
-- ✅ Creates default VPC if needed
+Add to your shell profile for persistence:
+```bash
+# Add to ~/.zshrc or ~/.bashrc
+echo 'export PROJECT_ID="your-gcp-project-id"' >> ~/.zshrc
+echo 'export VAULT_ADDR="https://your-vault.vault.hashicorp.cloud:8200"' >> ~/.zshrc
+echo 'export VAULT_TOKEN="your-vault-token"' >> ~/.zshrc
+echo 'export VAULT_NAMESPACE="admin"' >> ~/.zshrc
+```
 
-### Step 2: Update terraform.tfvars
+### Step 2: GCP Service Account Setup
+
+Automated GCP service account configuration:
 
 ```bash
-cd terraform
-cp terraform.tfvars.example terraform.tfvars
-
-# Edit terraform.tfvars with your values
-vi terraform.tfvars
+# Create service account and grant required permissions
+task gcp-setup
 ```
 
-Update these values:
-```hcl
-gcp_project_id = "your-project-id"  # From bootstrap script
-gcp_region     = "us-central1"
-gcp_zone       = "us-central1-a"
-```
+This task:
+- Enables required GCP APIs (Compute, OS Config, IAM)
+- Creates `terraform-automation` service account
+- Grants required IAM roles:
+  - `roles/compute.instanceAdmin.v1`
+  - `roles/compute.networkAdmin`
+  - `roles/compute.securityAdmin`
+  - `roles/osconfig.patchDeploymentAdmin`
+  - `roles/iam.serviceAccountUser`
 
-### Step 3: Run Terraform
+### Step 3: Service Account Key Creation
+
+Create and store the service account key in Vault:
 
 ```bash
-cd terraform
-terraform init
-terraform plan
-terraform apply
+# Create key and store in Vault automatically
+task gcp-create-key
 ```
 
-**What Terraform automates:**
-- ✅ Creates VPC network
-- ✅ Creates firewall rules
-- ✅ Creates additional service accounts (Ansible, OS Config)
-- ✅ Grants IAM permissions
-- ✅ Provisions Ubuntu VMs
-- ✅ Configures OS Config patch deployments
-- ✅ Sets up Terraform Actions
+This task:
+- Creates a new service account key
+- Stores it in Vault at `secret/gcp/service-account`
+- Verifies the secret was stored correctly
+- Deletes the local key file for security
 
-## Detailed Breakdown
+### Step 4: AAP and SSH Credentials
 
-### Manual Bootstrap (scripts/bootstrap-gcp.sh)
+#### Generate SSH Keys
 
-**Why manual?**
-- Enabling APIs requires Service Usage API (chicken-and-egg)
-- Creating the initial service account requires existing permissions
-- Cannot be done by Terraform without existing credentials
-
-**What it creates:**
-```
-Service Account: terraform-patching@PROJECT_ID.iam.gserviceaccount.com
-Roles Granted:
-  - roles/compute.admin
-  - roles/iam.serviceAccountAdmin
-  - roles/iam.serviceAccountUser
-  - roles/osconfig.patchDeploymentAdmin
-  - roles/resourcemanager.projectIamAdmin
-  - roles/serviceusage.serviceUsageAdmin
-
-APIs Enabled:
-  - compute.googleapis.com
-  - osconfig.googleapis.com
-  - iam.googleapis.com
-  - cloudresourcemanager.googleapis.com
-  - serviceusage.googleapis.com
+```bash
+# Generate SSH key pair for VM access
+ssh-keygen -t rsa -b 4096 -f ~/.ssh/ubuntu-patching -N ''
 ```
 
-### Terraform Automation (terraform/gcp-setup.tf)
+#### Store Credentials in Vault
 
-**What Terraform creates:**
+```bash
+# AAP API Token
+vault kv put secret/aap/api-token token="YOUR_AAP_API_TOKEN"
 
+# SSH Keys
+vault kv put secret/ssh/ubuntu-key \
+  private_key=@~/.ssh/ubuntu-patching \
+  public_key=@~/.ssh/ubuntu-patching.pub
 ```
-Service Accounts:
-  - ansible-patching-sa@PROJECT_ID.iam.gserviceaccount.com
-  - osconfig-patching-sa@PROJECT_ID.iam.gserviceaccount.com
 
-IAM Bindings:
-  - Ansible SA: compute.viewer, compute.osLogin
-  - OS Config SA: osconfig.patchDeploymentAdmin, compute.instanceAdmin.v1
+#### Verify All Secrets
 
-Network Resources:
-  - VPC: patching-demo-network (auto-subnet mode)
-  - Firewall: allow-ssh-patching-demo (port 22)
+```bash
+# Verify all Vault secrets are configured
+task vault-verify
+```
 
-Compute Resources:
-  - Ubuntu VMs (count: var.vm_count)
-  - OS Config patch deployment
+Expected output:
+```
+=== Verifying Vault Secrets ===
 
-Terraform Actions:
-  - Action: patch_vms (triggers AAP)
+1. GCP Service Account:
+  project_id: your-gcp-project-id
+  client_email: terraform-automation@...
+
+2. AAP API Token:
+  token: ***
+
+3. SSH Keys:
+  private_key: -----BEGIN OPENSSH PRIVATE KEY-----
+  public_key: ssh-rsa AAAAB3...
+```
+
+### Step 5: HCP Terraform Workspace Configuration
+
+Configure your HCP Terraform workspace variables:
+
+1. Go to your workspace: `https://app.terraform.io/app/<org>/<workspace>/variables`
+
+2. Add **Terraform Variables**:
+   - `vault_addr` = `https://your-vault.vault.hashicorp.cloud:8200`
+   - `aap_api_url` = `https://your-aap.com/api/controller/v2`
+   - `aap_job_template_id` = `<your-template-id>`
+   - `gcp_project_id` = `your-gcp-project-id`
+
+3. Add **Environment Variables**:
+   - `VAULT_TOKEN` = `your-vault-token` (mark as sensitive)
+   - `VAULT_NAMESPACE` = `admin` (mark as sensitive, for HCP Vault)
+
+### Step 6: Terraform Initialization
+
+Initialize Terraform:
+
+```bash
+task tf-init
+```
+
+### Step 7: Validate Configuration
+
+Validate the Terraform configuration:
+
+```bash
+task tf-validate
+```
+
+### Step 8: Deploy Infrastructure
+
+Since you're using HCP Terraform with VCS connection:
+
+```bash
+# Commit and push changes
+git add .
+git commit -m "Initial infrastructure deployment"
+git push origin main
+```
+
+HCP Terraform will automatically:
+1. Detect the push
+2. Trigger a plan
+3. Wait for your approval
+4. Apply the changes
+
+Monitor the run:
+```
+https://app.terraform.io/app/<org>/<workspace>
+```
+
+## Complete Setup Command
+
+Run the entire setup process:
+
+```bash
+task setup
+```
+
+This runs:
+1. `task check-prereqs` - Verify tools
+2. `task gcp-setup` - Configure GCP
+3. `task gcp-create-key` - Create and store key
+4. `task vault-setup` - Guide for AAP/SSH secrets
+5. `task tf-init` - Initialize Terraform
+
+## Verification
+
+### Verify GCP Resources
+
+```bash
+# List service accounts
+gcloud iam service-accounts list
+
+# Check IAM roles
+gcloud projects get-iam-policy $PROJECT_ID \
+  --flatten="bindings[].members" \
+  --filter="bindings.members:serviceAccount:terraform-automation@*"
+```
+
+### Verify Vault Secrets
+
+```bash
+task vault-verify
+```
+
+### Verify Terraform
+
+```bash
+# Validate configuration
+task tf-validate
+
+# Check formatting
+task tf-fmt
 ```
 
 ## Troubleshooting
 
-### Bootstrap Script Fails
+### GCP Authentication Issues
 
-**Error: "gcloud: command not found"**
 ```bash
-# Install gcloud CLI
-# macOS:
-brew install google-cloud-sdk
+# Login to gcloud
+gcloud auth login
 
-# Linux:
-curl https://sdk.cloud.google.com | bash
+# Set project
+gcloud config set project $PROJECT_ID
 
-# Verify installation
-gcloud version
+# Verify authentication
+gcloud auth list
 ```
 
-**Error: "API not enabled"**
-```bash
-# Enable manually in GCP Console
-# https://console.cloud.google.com/apis/library
+### Vault Connection Issues
 
-# Or use gcloud
-gcloud services enable compute.googleapis.com --project=PROJECT_ID
+```bash
+# Check Vault status
+vault status
+
+# Test authentication
+vault token lookup
+
+# List secrets
+vault kv list secret/
 ```
 
-**Error: "Permission denied"**
-- You need Owner or Editor role on the GCP project
-- Or specific roles: Service Usage Admin, Project IAM Admin
+### Permission Errors
 
-### Terraform Fails
+If you see permission errors during `task gcp-setup`:
 
-**Error: "Error 403: Required 'compute.networks.get' permission"**
 ```bash
-# Grant additional permissions to Terraform SA
-gcloud projects add-iam-policy-binding PROJECT_ID \
-  --member="serviceAccount:terraform-patching@PROJECT_ID.iam.gserviceaccount.com" \
-  --role="roles/compute.networkAdmin"
+# Ensure you have Owner or Editor role
+gcloud projects get-iam-policy $PROJECT_ID \
+  --flatten="bindings[].members" \
+  --filter="bindings.members:user:$(gcloud config get-value account)"
 ```
 
-**Error: "Service account key already exists"**
-```bash
-# List existing keys
-gcloud iam service-accounts keys list \
-  --iam-account=terraform-patching@PROJECT_ID.iam.gserviceaccount.com
+### HCP Terraform Issues
 
-# Delete old key if needed
-gcloud iam service-accounts keys delete KEY_ID \
-  --iam-account=terraform-patching@PROJECT_ID.iam.gserviceaccount.com
-```
+If HCP Terraform doesn't trigger automatically:
 
-**Error: "Vault token not set"**
-- See [HCP_TERRAFORM_SETUP.md](HCP_TERRAFORM_SETUP.md) for Vault configuration
-- Ensure VAULT_TOKEN is set in HCP Terraform workspace
+1. Check VCS connection in workspace settings
+2. Verify webhook is configured in your Git repository
+3. Manually trigger a run from the UI
 
-## Manual Setup (Alternative)
+## Next Steps
 
-If you prefer manual setup without the bootstrap script:
+After successful setup:
 
-### 1. Enable APIs
+1. **Review the deployment**
+   - Check HCP Terraform run logs
+   - Verify VMs are created in GCP Console
+   - Confirm firewall rules are in place
 
-```bash
-gcloud services enable compute.googleapis.com osconfig.googleapis.com iam.googleapis.com
-```
+2. **Test the workflow**
+   - Follow [Demo Workflow](DEMO_WORKFLOW.md)
+   - Trigger Terraform Actions
+   - Monitor AAP job execution
 
-### 2. Create Service Account
+3. **Run tests**
+   ```bash
+   task test
+   ```
 
-```bash
-gcloud iam service-accounts create terraform-patching \
-  --display-name="Terraform Patching SA"
-```
+4. **Explore documentation**
+   - [GCP Setup Details](GCP_SETUP.md)
+   - [AAP Configuration](AAP_SETUP.md)
+   - [Demo Walkthrough](DEMO_WORKFLOW.md)
 
-### 3. Grant Roles
+## Cleanup
 
-```bash
-PROJECT_ID="your-project-id"
-SA_EMAIL="terraform-patching@${PROJECT_ID}.iam.gserviceaccount.com"
-
-gcloud projects add-iam-policy-binding $PROJECT_ID \
-  --member="serviceAccount:$SA_EMAIL" \
-  --role="roles/compute.admin"
-
-gcloud projects add-iam-policy-binding $PROJECT_ID \
-  --member="serviceAccount:$SA_EMAIL" \
-  --role="roles/iam.serviceAccountAdmin"
-
-# ... repeat for other roles
-```
-
-### 4. Create Key
+To destroy all resources:
 
 ```bash
-gcloud iam service-accounts keys create ~/gcp-key.json \
-  --iam-account=$SA_EMAIL
-```
+# Via HCP Terraform UI
+task tf-destroy
 
-### 5. Store in Vault
-
-```bash
-vault kv put secret/gcp/service-account \
-  key="$(cat ~/gcp-key.json)" \
-  project_id="$PROJECT_ID"
+# Follow the instructions to queue a destroy plan
 ```
 
 ## Security Best Practices
 
-1. **Service Account Keys**
-   - Store only in Vault, never in code
-   - Delete local copies after storing in Vault
-   - Rotate keys every 90 days
+1. **Never commit secrets**
+   - All secrets in Vault
+   - `terraform.tfvars` is gitignored
+   - Service account keys deleted after storing
 
-2. **IAM Permissions**
-   - Use least privilege principle
-   - Separate service accounts for different purposes
-   - Regularly audit IAM bindings
-
-3. **Network Security**
-   - Restrict SSH source ranges in production
-   - Use Cloud NAT for outbound traffic
-   - Enable VPC Flow Logs for monitoring
-
-4. **Credential Rotation**
+2. **Rotate credentials regularly**
    ```bash
-   # Rotate service account key
-   ./scripts/rotate-gcp-key.sh
+   # Create new service account key
+   task gcp-create-key
    ```
 
-## Cost Estimation
+3. **Use least privilege**
+   - Service accounts have minimal required permissions
+   - Review IAM roles periodically
 
-Running this prototype costs approximately:
-
-```
-2x e2-medium VMs (730 hours/month):  ~$50/month
-40 GB standard persistent disk:      ~$2/month
-Egress traffic (minimal):            ~$1/month
-Total:                               ~$53/month
-```
-
-To minimize costs:
-- Destroy resources when not in use: `terraform destroy`
-- Use preemptible VMs (not covered in this demo)
-- Use smaller machine types for testing
-
-## Next Steps
-
-After automated setup is complete:
-
-1. ✅ Configure AAP (see [AAP_SETUP.md](AAP_SETUP.md))
-2. ✅ Set up HCP Terraform workspace (see [HCP_TERRAFORM_SETUP.md](HCP_TERRAFORM_SETUP.md))
-3. ✅ Run the demo workflow (see [DEMO_WORKFLOW.md](DEMO_WORKFLOW.md))
+4. **Enable audit logging**
+   - GCP Cloud Audit Logs
+   - Vault audit logs
+   - HCP Terraform run history
 
 ## Support
 
-For issues or questions:
-- Check [GCP_SETUP.md](GCP_SETUP.md) for detailed manual setup
-- Review Terraform logs: `terraform plan -out=plan.out`
-- Check GCP Console for resource status
-- Verify IAM permissions in GCP Console
-
----
-
-**Document Version**: 1.0  
-**Last Updated**: 2024-02-06  
-**Maintained By**: Platform Engineering Team
+For issues:
+1. Check this guide
+2. Review [troubleshooting](#troubleshooting)
+3. Check [main README](../README.md)
+4. Open an issue in the repository

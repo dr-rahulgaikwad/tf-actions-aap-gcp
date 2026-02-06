@@ -1,768 +1,311 @@
 # Terraform Actions GCP Patching Prototype
 
-A demonstration of HashiCorp's Terraform Actions feature for Day 2 operations management, integrating HCP Terraform with Ansible Automation Platform (AAP) to automate OS patching on GCP Ubuntu VMs.
-
-## Table of Contents
-
-- [Overview](#overview)
-- [Architecture](#architecture)
-- [Prerequisites](#prerequisites)
-- [Project Structure](#project-structure)
-- [Quick Start](#quick-start)
-- [Setup Guides](#setup-guides)
-- [Demo Workflow](#demo-workflow)
-- [Security](#security)
-- [Testing](#testing)
-- [Troubleshooting](#troubleshooting)
-- [Requirements Satisfied](#requirements-satisfied)
-- [Additional Resources](#additional-resources)
+Automated VM patching workflow using Terraform Actions, GCP OS Config, and Ansible Automation Platform (AAP).
 
 ## Overview
 
-This prototype showcases modern infrastructure lifecycle management patterns by demonstrating a complete Day 0 through Day 2 workflow:
-
-- **Day 0/1 (Provisioning)**: Provision Ubuntu VMs on GCP using HCP Terraform with infrastructure as code
-- **Day 2 (Operations)**: Trigger Ansible playbooks via Terraform Actions for automated OS patching
-
-### Key Features
-
-- **Infrastructure as Code**: All infrastructure defined in Terraform with version control
-- **Secure Credential Management**: All secrets stored in HashiCorp Vault Enterprise
-- **Automated Day 2 Operations**: Patching triggered directly from Terraform workflows
-- **Integration**: Seamless integration between HCP Terraform, GCP, AAP, and Vault
-- **Scalable**: Designed to scale from 2 VMs to hundreds of instances
-- **Demo-Ready**: Simple enough to demonstrate in 15 minutes
-
-### Use Cases
-
-- Automated security patching for VM fleets
-- Day 2 operations management from infrastructure code
-- Integration of configuration management with infrastructure provisioning
-- Demonstration of Terraform Actions capabilities
-- Enterprise secrets management patterns
+This prototype demonstrates Day 2 operations automation by integrating:
+- **HCP Terraform** - Infrastructure provisioning and state management
+- **Terraform Actions** - Automated workflow triggers for Day 2 operations
+- **GCP OS Config** - Native patch management for Ubuntu VMs
+- **Ansible Automation Platform** - Configuration management and patching orchestration
+- **HashiCorp Vault** - Secure credential management
 
 ## Architecture
 
-### High-Level Architecture
-
-
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    HCP Terraform                             │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐      │
-│  │ Terraform    │  │  Terraform   │  │    Vault     │      │
-│  │    Code      │  │   Actions    │  │ Integration  │      │
-│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘      │
-└─────────┼──────────────────┼──────────────────┼─────────────┘
-          │                  │                  │
-          │ Provisions       │ Triggers         │ Retrieves
-          │ Infrastructure   │ Playbooks        │ Credentials
-          ▼                  ▼                  ▼
-┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
-│   Google Cloud  │  │     Ansible     │  │   HashiCorp     │
-│    Platform     │  │   Automation    │  │     Vault       │
-│                 │  │    Platform     │  │   Enterprise    │
-│  • Ubuntu VMs   │  │  • Job Template │  │  • GCP Creds    │
-│  • Networking   │  │  • Playbooks    │  │  • AAP Token    │
-│  • OS Config    │  │  • Inventory    │  │  • SSH Keys     │
-└─────────────────┘  └────────┬────────┘  └─────────────────┘
-          ▲                   │
-          │                   │ SSH + Ansible
-          │                   │ Patching
-          └───────────────────┘
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│  HCP Terraform  │────▶│ Terraform Actions│────▶│      AAP        │
+│   (Provision)   │     │  (Day 2 Trigger) │     │  (Execute Job)  │
+└─────────────────┘     └──────────────────┘     └─────────────────┘
+         │                                                 │
+         │                                                 │
+         ▼                                                 ▼
+┌─────────────────┐                              ┌─────────────────┐
+│   GCP VMs       │◀─────────────────────────────│  Ansible        │
+│   (Ubuntu)      │      SSH Connection          │  Playbook       │
+└─────────────────┘                              └─────────────────┘
+         │
+         │
+         ▼
+┌─────────────────┐
+│  OS Config      │
+│  (Patching)     │
+└─────────────────┘
 ```
 
-### Component Interaction Flow
+## Quick Start
 
-**Day 0/1 - Provisioning Flow:**
-1. Engineer commits Terraform code to version control
-2. HCP Terraform workspace detects changes and runs plan
-3. Terraform retrieves GCP credentials from Vault
-4. Terraform provisions Ubuntu VMs on GCP
-5. Terraform configures OS Config patch deployment
-6. VM details (IPs, instance IDs) stored in Terraform state
+### Prerequisites
 
-**Day 2 - Patching Flow:**
-1. Engineer triggers Terraform Action from HCP UI or API
-2. Terraform Action retrieves AAP credentials from Vault
-3. Action invokes AAP job template via REST API
-4. Action passes VM inventory data (IPs, instance IDs) to AAP
-5. AAP executes Ansible playbook against target VMs
-6. Playbook performs apt update and security patching
-7. AAP reports execution status back to HCP Terraform
-8. Results visible in HCP Terraform UI and AAP dashboard
+Install required tools:
+- [gcloud CLI](https://cloud.google.com/sdk/docs/install)
+- [Terraform](https://www.terraform.io/downloads) (>= 1.7.0)
+- [Vault CLI](https://www.vaultproject.io/downloads)
+- [Task](https://taskfile.dev/installation/)
+- Python 3.8+
 
+Check prerequisites:
+```bash
+task check-prereqs
+```
 
-## Prerequisites
+### Setup
 
-### Required Accounts and Services
+1. **Clone the repository**
+```bash
+git clone <repository-url>
+cd tf-actions-aap-gcp
+```
 
-1. **HCP Terraform Account**
-   - Active HCP Terraform account
-   - Workspace created and configured
-   - Terraform version 1.7.0 or higher
+2. **Configure environment variables**
+```bash
+export PROJECT_ID="your-gcp-project-id"
+export VAULT_ADDR="https://your-vault-cluster.vault.hashicorp.cloud:8200"
+export VAULT_TOKEN="your-vault-token"
+export VAULT_NAMESPACE="admin"  # For HCP Vault
+```
 
-2. **Google Cloud Platform**
-   - GCP project with billing enabled
-   - Compute Engine API enabled
-   - OS Config API enabled
-   - Service account with appropriate IAM permissions
+3. **Run automated setup**
+```bash
+# Setup GCP service account with required permissions
+task gcp-setup
 
-3. **Ansible Automation Platform**
-   - AAP instance (version 2.4+) - Options:
-     - Red Hat Ansible Automation Platform (production)
-     - AWX (open source, development/testing)
-     - Red Hat Demo System
-     - Cloud Marketplace deployment
-   - Admin access to AAP
-   - Network connectivity from AAP to GCP VMs
+# Create service account key and store in Vault
+task gcp-create-key
 
-4. **HashiCorp Vault Enterprise**
-   - Vault server accessible from HCP Terraform and AAP
-   - Vault token with appropriate policies
-   - KV secrets engine enabled
+# Setup AAP and SSH credentials in Vault (interactive)
+task vault-setup
 
-### Required Tools
+# Verify all secrets are configured
+task vault-verify
 
-- **Terraform CLI**: >= 1.7.0 (for local development)
-- **gcloud CLI**: Latest version (for GCP setup)
-- **Ansible**: >= 2.14 (for playbook development)
-- **vault CLI**: Latest version (for credential management)
-- **Python**: >= 3.9 (for testing)
-- **pytest**: >= 7.0 (for property-based tests)
-- **hypothesis**: >= 6.0 (for property-based testing)
+# Initialize Terraform
+task tf-init
+```
 
-### Network Requirements
+4. **Configure HCP Terraform workspace**
 
-Ensure network connectivity between components:
+Go to your HCP Terraform workspace and add these variables:
 
-| Source | Destination | Port | Protocol | Purpose |
-|--------|-------------|------|----------|---------|
-| HCP Terraform | GCP API | 443 | HTTPS | Infrastructure provisioning |
-| HCP Terraform | Vault | 8200 | HTTPS | Credential retrieval |
-| HCP Terraform | AAP API | 443 | HTTPS | Trigger actions |
-| AAP | GCP VMs | 22 | SSH | Ansible playbook execution |
-| AAP | Vault | 8200 | HTTPS | Credential retrieval |
+**Terraform Variables:**
+- `vault_addr` = Your Vault URL
+- `aap_api_url` = Your AAP API URL (e.g., `https://your-aap.com/api/controller/v2`)
+- `aap_job_template_id` = Your AAP job template ID
+- `gcp_project_id` = Your GCP project ID
 
+**Environment Variables:**
+- `VAULT_TOKEN` = Your Vault token (mark as sensitive)
+- `VAULT_NAMESPACE` = `admin` (for HCP Vault, mark as sensitive)
+
+5. **Deploy infrastructure**
+```bash
+# Validate configuration
+task tf-validate
+
+# Commit and push (triggers HCP Terraform run)
+git add .
+git commit -m "Initial deployment"
+git push origin main
+```
+
+6. **Monitor deployment**
+
+Go to your HCP Terraform workspace to review and approve the plan:
+```
+https://app.terraform.io/app/<your-org>/workspaces/<workspace-name>
+```
+
+## Available Tasks
+
+View all available tasks:
+```bash
+task --list
+```
+
+### Common Tasks
+
+**Setup & Configuration:**
+- `task setup` - Complete automated setup
+- `task gcp-setup` - Configure GCP service account
+- `task gcp-create-key` - Create and store service account key
+- `task vault-setup` - Interactive Vault configuration guide
+- `task vault-verify` - Verify all Vault secrets
+
+**Terraform Operations:**
+- `task tf-init` - Initialize Terraform
+- `task tf-validate` - Validate configuration
+- `task tf-fmt` - Format Terraform files
+- `task tf-plan` - Run Terraform plan
+- `task tf-apply` - Instructions for applying via HCP Terraform
+
+**Testing:**
+- `task test` - Run all tests
+- `task test-terraform` - Validate Terraform
+- `task test-ansible` - Validate Ansible playbooks
+- `task test-python` - Run property-based tests
+
+**Cleanup:**
+- `task clean` - Clean temporary files
+- `task tf-destroy` - Destroy infrastructure (via HCP Terraform)
 
 ## Project Structure
 
 ```
-terraform-actions-gcp-patching/
-├── terraform/                      # Terraform configuration files
-│   ├── main.tf                    # Main infrastructure resources (VMs, networking)
-│   ├── actions.tf                 # Terraform Actions configuration
-│   ├── variables.tf               # Input variable definitions
-│   ├── outputs.tf                 # Output definitions (IPs, instance IDs)
-│   ├── versions.tf                # Provider and version requirements
-│   ├── backend-local.tf.example   # Example local backend configuration
-│   └── terraform.tfvars.example   # Example variables file
-├── ansible/                       # Ansible playbooks and inventory
-│   ├── gcp_vm_patching.yml       # Main patching playbook
-│   └── inventory_template.yml     # Inventory template
-├── docs/                          # Detailed setup guides
-│   ├── GCP_SETUP.md              # GCP project configuration guide
-│   ├── AAP_SETUP.md              # AAP configuration guide
-│   └── DEMO_WORKFLOW.md          # Complete demonstration workflow
-├── tests/                         # Unit and property-based tests
-│   ├── validate_terraform.sh      # Terraform validation script
-│   ├── validate_ansible.sh        # Ansible validation script
-│   ├── test_*.py                  # Property-based tests
-│   └── README.md                  # Testing documentation
-├── .kiro/                         # Specification documents
-│   └── specs/terraform-actions-gcp-patching/
-│       ├── requirements.md        # Requirements specification
-│       ├── design.md              # Design document
-│       └── tasks.md               # Task list
-└── README.md                      # This file
+.
+├── terraform/              # Terraform configuration
+│   ├── main.tf            # Main infrastructure resources
+│   ├── actions.tf         # Terraform Actions configuration
+│   ├── variables.tf       # Variable definitions
+│   ├── outputs.tf         # Output values
+│   └── versions.tf        # Provider configuration
+├── ansible/               # Ansible playbooks
+│   └── gcp_vm_patching.yml
+├── docs/                  # Documentation
+│   ├── AUTOMATED_SETUP.md # Automated setup guide
+│   ├── GCP_SETUP.md       # GCP configuration
+│   ├── AAP_SETUP.md       # AAP configuration
+│   └── DEMO_WORKFLOW.md   # Demo walkthrough
+├── tests/                 # Test suite
+│   ├── test_*.py          # Property-based tests
+│   ├── validate_*.sh      # Validation scripts
+│   └── requirements.txt   # Python dependencies
+├── Taskfile.yml           # Task automation
+└── README.md              # This file
 ```
 
-### Key Files
+## Configuration
 
-- **terraform/main.tf**: Defines GCP VMs, networking, and OS Config patch deployment
-- **terraform/actions.tf**: Configures Terraform Actions for triggering AAP jobs
-- **ansible/gcp_vm_patching.yml**: Ansible playbook for OS patching operations
-- **docs/GCP_SETUP.md**: Step-by-step GCP project setup instructions
-- **docs/AAP_SETUP.md**: Comprehensive AAP configuration guide
-- **docs/DEMO_WORKFLOW.md**: Complete demonstration workflow with troubleshooting
+### Terraform Variables
 
-
-## Quick Start
-
-> **📋 For complete step-by-step setup instructions, see [SETUP_STEPS.md](SETUP_STEPS.md)**
-
-### Step 1: Set Up GCP Project
-
-1. Enable required APIs:
-   ```bash
-   export PROJECT_ID="your-gcp-project-id"
-   gcloud services enable compute.googleapis.com
-   gcloud services enable osconfig.googleapis.com
-   gcloud services enable iam.googleapis.com
-   ```
-
-2. Grant IAM permissions to your service account:
-   ```bash
-   export SA_EMAIL="your-sa@your-project.iam.gserviceaccount.com"
-   
-   gcloud projects add-iam-policy-binding $PROJECT_ID \
-     --member="serviceAccount:${SA_EMAIL}" \
-     --role="roles/compute.instanceAdmin.v1"
-   
-   gcloud projects add-iam-policy-binding $PROJECT_ID \
-     --member="serviceAccount:${SA_EMAIL}" \
-     --role="roles/compute.networkAdmin"
-   
-   gcloud projects add-iam-policy-binding $PROJECT_ID \
-     --member="serviceAccount:${SA_EMAIL}" \
-     --role="roles/osconfig.patchDeploymentAdmin"
-   ```
-
-3. Create service account key and store in Vault:
-   ```bash
-   gcloud iam service-accounts keys create terraform-sa-key.json \
-     --iam-account="${SA_EMAIL}"
-   
-   vault kv put secret/gcp/service-account @terraform-sa-key.json
-   rm terraform-sa-key.json
-   ```
-
-**For detailed instructions, see [SETUP_STEPS.md](SETUP_STEPS.md) or [docs/GCP_SETUP.md](docs/GCP_SETUP.md)**
-
-### Step 2: Configure Ansible Automation Platform
-
-1. Access your AAP instance
-2. Create credentials (Vault integration for SSH keys)
-3. Create inventory (dynamic, provided by Terraform Actions)
-4. Create project (link to playbook repository)
-5. Create job template for patching
-6. Generate API token for Terraform Actions
-
-**For detailed instructions, see [docs/AAP_SETUP.md](docs/AAP_SETUP.md)**
-
-### Step 3: Store Credentials in Vault
-
-Store all required credentials in HashiCorp Vault:
-
+Copy and customize the example file:
 ```bash
-export VAULT_ADDR="https://vault.example.com:8200"
-export VAULT_NAMESPACE="admin"  # For HCP Vault
-vault login
-
-# Store GCP service account key (entire JSON file)
-vault kv put secret/gcp/service-account @terraform-sa-key.json
-
-# Store AAP API token
-vault kv put secret/aap/api-token token="<your-aap-token>"
-
-# Store SSH keys
-vault kv put secret/ssh/ubuntu-key \
-  private_key=@$HOME/.ssh/ubuntu-patching-demo \
-  public_key=@$HOME/.ssh/ubuntu-patching-demo.pub
+cp terraform/terraform.tfvars.example terraform/terraform.tfvars
 ```
 
-**Important**: Store the GCP service account JSON directly (not under a "key" field).
+Key variables:
+- `gcp_project_id` - Your GCP project ID
+- `gcp_region` - GCP region (default: us-central1)
+- `vm_count` - Number of VMs to provision (default: 2)
+- `vault_addr` - Vault server URL
+- `aap_api_url` - AAP API endpoint
+- `aap_job_template_id` - AAP job template ID
 
+### Vault Secrets
 
-### Step 4: Configure HCP Terraform Workspace
+Required secrets in Vault:
 
-**Set variables in HCP Terraform workspace UI:**
+1. **GCP Service Account** (`secret/gcp/service-account`)
+   - Full service account JSON key
 
-Go to: `https://app.terraform.io/app/<your-org>/<your-workspace>/variables`
+2. **AAP API Token** (`secret/aap/api-token`)
+   - `token`: AAP API token
 
-**Terraform Variables:**
-- `gcp_project_id` = "your-gcp-project-id"
-- `vault_addr` = "https://vault.example.com:8200"
-- `aap_api_url` = "https://aap.example.com/api/controller/v2"
-- `aap_job_template_id` = 42 (your job template ID)
+3. **SSH Keys** (`secret/ssh/ubuntu-key`)
+   - `private_key`: SSH private key
+   - `public_key`: SSH public key
 
-**Environment Variables:**
-- `VAULT_TOKEN` = "your-vault-token" (mark as sensitive)
-- `VAULT_NAMESPACE` = "admin" (mark as sensitive, for HCP Vault)
+## Workflow
 
-**For complete variable list, see [SETUP_STEPS.md](SETUP_STEPS.md)**
-
-### Step 5: Deploy Infrastructure
-
-Since you're using HCP Terraform with VCS connection:
-
-1. **Commit and push your code**:
-   ```bash
-   git add -A
-   git commit -m "feat: Initial infrastructure setup"
-   git push origin main
-   ```
-
-2. **Monitor the run in HCP Terraform**:
-   - Go to your workspace in HCP Terraform UI
-   - A run will trigger automatically
-   - Review the plan
-   - Click "Confirm & Apply"
-   - Wait for completion (~3-5 minutes)
-
-3. **View outputs**:
-   - Check the outputs in HCP Terraform UI
-   - Or use: `terraform output` (if running locally)
-
-
-### Step 6: Trigger Day 2 Operations
-
-**Option A: Via HCP Terraform UI**
-1. Navigate to your workspace in HCP Terraform
-2. Go to **Actions** tab
-3. Find "Patch Ubuntu VMs" action
-4. Click **Run Action**
-5. Monitor execution in AAP UI
-
-**Option B: Via API**
+### 1. Provision Infrastructure
 ```bash
-# Get action configuration
-AAP_URL=$(terraform output -raw action_patch_vms_url)
-AAP_TOKEN=$(vault kv get -field=token secret/aap/api-token)
-
-# Trigger action
-terraform output -raw action_patch_vms_payload > /tmp/payload.json
-curl -k -X POST \
-  -H "Authorization: Bearer ${AAP_TOKEN}" \
-  -H "Content-Type: application/json" \
-  -d @/tmp/payload.json \
-  ${AAP_URL}
+git add .
+git commit -m "Deploy infrastructure"
+git push origin main
 ```
 
-### Step 7: Verify Results
+HCP Terraform automatically triggers a run when changes are pushed.
 
-1. Check AAP job status:
-   - Navigate to AAP UI → Views → Jobs
-   - View real-time playbook output
+### 2. Trigger Patching via Terraform Actions
 
-2. Verify VMs were patched:
-   ```bash
-   VM_IP=$(terraform output -json vm_external_ips | jq -r '.[0]')
-   ssh ubuntu@${VM_IP} "sudo apt list --upgradable"
-   ```
+Terraform Actions automatically triggers AAP job templates for Day 2 operations like patching.
 
+### 3. Monitor Execution
 
-## Setup Guides
-
-Detailed step-by-step setup guides are available in the `docs/` directory:
-
-### [GCP Setup Guide](docs/GCP_SETUP.md)
-Complete guide for configuring your GCP project:
-- Creating or selecting a GCP project
-- Enabling required APIs (Compute Engine, OS Config)
-- Creating service accounts with minimal IAM permissions
-- Generating and storing service account keys in Vault
-- Configuring networking and firewall rules
-- Troubleshooting common GCP issues
-
-**Time to Complete**: 15-20 minutes  
-**Requirements Satisfied**: 7.1, 7.2, 7.3, 7.4, 9.2
-
-### [AAP Setup Guide](docs/AAP_SETUP.md)
-Comprehensive guide for configuring Ansible Automation Platform:
-- AAP installation options (Red Hat AAP, AWX, Demo System, Cloud Marketplace)
-- Creating credentials with Vault integration
-- Configuring inventories and projects
-- Creating job templates for patching
-- Generating API tokens for Terraform Actions
-- Testing job templates and API integration
-- Troubleshooting AAP issues
-
-**Time to Complete**: 30-45 minutes  
-**Requirements Satisfied**: 5.1, 5.2, 5.3, 5.4, 5.5, 9.1
-
-### [Demo Workflow Guide](docs/DEMO_WORKFLOW.md)
-Complete demonstration workflow for showcasing the prototype:
-- Pre-demo checklist and preparation
-- Day 0/1 provisioning demonstration
-- Day 2 operations demonstration
-- Verification and validation steps
-- Troubleshooting guide for common demo issues
-- Advanced scenarios (scheduled patching, multi-environment)
-
-**Time to Complete**: 15 minutes (demo)  
-**Requirements Satisfied**: 9.5, 9.6, 10.1, 10.2, 10.3, 10.4
-
-
-## Demo Workflow
-
-This prototype is designed for a **15-minute demonstration** showcasing Terraform Actions for Day 2 operations.
-
-### Demo Overview
-
-**Part 1: Day 0/1 - Infrastructure Provisioning (5 minutes)**
-1. Show Terraform configuration files
-2. Run `terraform plan` to preview changes
-3. Run `terraform apply` to provision VMs
-4. Display outputs (VM IPs, instance IDs)
-5. Verify VMs in GCP Console
-
-**Part 2: Day 2 - Automated Patching (7 minutes)**
-1. Show Terraform Actions configuration
-2. Trigger action from HCP Terraform UI
-3. Monitor job execution in AAP UI
-4. View real-time Ansible playbook output
-5. Verify patching results on VMs
-
-**Part 3: Verification (3 minutes)**
-1. Review infrastructure state in HCP Terraform
-2. Check AAP job history
-3. Verify Vault credential access logs
-4. Show GCP resources and compliance
-
-### Key Demo Messages
-
-- **Infrastructure as Code**: All infrastructure defined in Terraform
-- **Secure Credentials**: All secrets managed through Vault
-- **Automated Operations**: Day 2 operations triggered from infrastructure code
-- **Scalability**: Approach scales from 2 VMs to hundreds
-- **Integration**: Seamless workflow across multiple platforms
-
-**For complete demo workflow, see [docs/DEMO_WORKFLOW.md](docs/DEMO_WORKFLOW.md)**
-
-
-## Security
-
-This prototype implements enterprise security best practices:
-
-### Credential Management
-
-- **All credentials stored in HashiCorp Vault**: GCP service account keys, AAP API tokens, SSH keys
-- **No plaintext credentials**: Never stored in Terraform code, variables, or version control
-- **Dynamic credential retrieval**: Credentials retrieved at runtime from Vault
-- **Audit logging**: All credential access tracked in Vault audit logs
-
-### IAM and Permissions
-
-- **Least privilege principle**: Service accounts granted minimum required permissions
-- **Role-based access**: Specific IAM roles for each function:
-  - `roles/compute.instanceAdmin.v1` - VM management
-  - `roles/compute.networkAdmin` - Network management
-  - `roles/osconfig.patchDeploymentAdmin` - Patch management
-  - `roles/iam.serviceAccountUser` - Service account usage
-
-### Network Security
-
-- **Minimal firewall rules**: Only SSH access (port 22) to demo VMs
-- **Default VPC**: Uses GCP default network for simplicity
-- **Tagged resources**: VMs tagged for firewall rule targeting
-- **Private communication**: AAP connects to VMs via internal IPs where possible
-
-### Secrets Rotation
-
-- **Service account keys**: Rotate every 90 days (recommended)
-- **AAP API tokens**: Set expiration dates and rotate regularly
-- **SSH keys**: Rotate as part of security policy
-- **Vault tokens**: Use short-lived tokens with appropriate TTL
-
-### Security Validation
-
-The project includes property-based tests for security:
-- **Property 14**: Vault credential retrieval (no hardcoded credentials)
-- **Property 15**: No plaintext credentials in code
-- **Property 16**: Least privilege IAM permissions
-
-Run security tests:
-```bash
-cd tests/
-pytest test_vault_credential_retrieval.py
-pytest test_iam_least_privilege.py
-pytest test_firewall_minimal_rules.py
-```
-
+- **HCP Terraform**: Monitor infrastructure changes
+- **AAP**: Monitor job execution and playbook runs
+- **GCP Console**: View VM status and patch compliance
 
 ## Testing
 
-The project includes comprehensive testing with both unit tests and property-based tests.
-
-### Testing Approach
-
-- **Unit Tests**: Validate specific examples and edge cases
-- **Property-Based Tests**: Verify universal properties across randomized inputs
-- **Integration Tests**: Test end-to-end workflows with real infrastructure
-
-### Running Tests
-
-**Terraform Validation:**
+Run the complete test suite:
 ```bash
-./tests/validate_terraform.sh
+task test
 ```
 
-**Ansible Validation:**
+Individual test suites:
 ```bash
-./tests/validate_ansible.sh
+task test-terraform  # Terraform validation
+task test-ansible    # Ansible syntax check
+task test-python     # Property-based tests
 ```
 
-**Property-Based Tests:**
-```bash
-cd tests/
-pytest -v
-```
+## Documentation
 
-**Specific Test Suites:**
-```bash
-# Security tests
-pytest test_vault_credential_retrieval.py
-pytest test_iam_least_privilege.py
-pytest test_firewall_minimal_rules.py
-
-# Infrastructure tests
-pytest test_vm_provisioning.py
-pytest test_output_completeness.py
-```
-
-### Property-Based Tests
-
-The project uses **Hypothesis** (Python) for property-based testing with a minimum of **100 iterations** per test.
-
-**Key Properties Tested:**
-- **Property 1**: VM Provisioning Completeness
-- **Property 3**: Output Data Completeness
-- **Property 4**: Resource Labeling Consistency
-- **Property 14**: Vault Credential Retrieval
-- **Property 15**: No Plaintext Credentials
-- **Property 16**: Least Privilege IAM
-
-Each property test includes a comment referencing the design property:
-```python
-# Feature: terraform-actions-gcp-patching, Property 15: No Plaintext Credentials
-```
-
-**For detailed testing documentation, see [tests/README.md](tests/README.md)**
-
+Detailed documentation:
+- [Automated Setup Guide](docs/AUTOMATED_SETUP.md) - Complete setup walkthrough
+- [GCP Setup](docs/GCP_SETUP.md) - GCP configuration details
+- [AAP Setup](docs/AAP_SETUP.md) - AAP configuration details
+- [Demo Workflow](docs/DEMO_WORKFLOW.md) - Step-by-step demo
 
 ## Troubleshooting
 
-### Common Issues and Solutions
+### Common Issues
 
-#### Issue 1: Terraform Apply Fails - API Not Enabled
-
-**Error:**
-```
-Error: Error creating instance: googleapi: Error 403: Compute Engine API has not been used
-```
-
-**Solution:**
+**1. Vault connection errors**
 ```bash
-gcloud services enable compute.googleapis.com --project=${PROJECT_ID}
-gcloud services enable osconfig.googleapis.com --project=${PROJECT_ID}
-terraform apply
-```
-
-#### Issue 2: Vault Connection Failed
-
-**Error:**
-```
-Error: Error making API request to Vault
-```
-
-**Solution:**
-```bash
-# Verify Vault address
-echo $VAULT_ADDR
-
-# Test connectivity
+# Verify Vault connectivity
 vault status
 
-# Re-authenticate
-vault login
-
-# Verify secrets exist
-vault kv get secret/gcp/service-account
+# Check environment variables
+echo $VAULT_ADDR
+echo $VAULT_TOKEN
 ```
 
-#### Issue 3: SSH Connection to VMs Fails
-
-**Error:**
-```
-ssh: connect to host 34.123.45.67 port 22: Connection refused
-```
-
-**Solution:**
+**2. GCP permission errors**
 ```bash
-# Check VM status
-gcloud compute instances list --project=${PROJECT_ID}
-
-# Verify firewall rule
-gcloud compute firewall-rules list --project=${PROJECT_ID}
-
-# Wait 1-2 minutes for VM to fully boot, then retry
+# Verify service account roles
+task gcp-setup
 ```
 
-
-#### Issue 4: AAP Job Fails - Inventory Empty
-
-**Error:**
-```
-ERROR! Inventory is empty
-```
-
-**Solution:**
+**3. Terraform state issues**
 ```bash
-# Verify action payload includes inventory
-terraform output action_patch_vms_payload | jq '.extra_vars.vm_inventory'
-
-# Verify job template accepts extra_vars
-# In AAP UI: Resources → Templates → GCP VM Patching → Edit
-# Ensure "Prompt on launch" is enabled for "Variables"
+# Reinitialize Terraform
+task tf-clean
+task tf-init
 ```
 
-#### Issue 5: AAP Job Fails - SSH Authentication
+**4. HCP Terraform VCS connection**
 
-**Error:**
-```
-FAILED! => {"msg": "Failed to connect to the host via ssh: Permission denied (publickey)"}
-```
+If you see "Apply not allowed for workspaces with a VCS connection":
+- Commit and push your changes
+- HCP Terraform will automatically trigger a run
+- Review and approve in the HCP Terraform UI
 
-**Solution:**
-```bash
-# Verify SSH key in Vault matches VM metadata
-vault kv get secret/ssh/ubuntu-key
+## Security
 
-# Test SSH manually
-VM_IP=$(terraform output -json vm_external_ips | jq -r '.[0]')
-ssh -i ~/.ssh/test-key ubuntu@${VM_IP}
+- All credentials stored in HashiCorp Vault
+- Service accounts follow principle of least privilege
+- No plaintext credentials in code or configuration
+- Firewall rules restrict access to SSH only
+- Regular security audits via property-based tests
 
-# Verify AAP credential references correct Vault path
-```
+## Contributing
 
-#### Issue 6: Playbook Fails - apt Lock
+1. Create a feature branch
+2. Make changes
+3. Run tests: `task test`
+4. Format code: `task tf-fmt`
+5. Commit and push
+6. Create pull request
 
-**Error:**
-```
-FAILED! => {"msg": "Could not get lock /var/lib/apt/lists/lock"}
-```
+## License
 
-**Solution:**
-```bash
-# Another process is using apt (common on fresh VMs)
-# Wait 2-3 minutes for automatic updates to complete
-# The playbook includes retry logic, so retry the job
-```
+[Your License Here]
 
-### Additional Troubleshooting
+## Support
 
-For comprehensive troubleshooting guides, see:
-- **[docs/GCP_SETUP.md](docs/GCP_SETUP.md)** - GCP-specific issues
-- **[docs/AAP_SETUP.md](docs/AAP_SETUP.md)** - AAP-specific issues
-- **[docs/DEMO_WORKFLOW.md](docs/DEMO_WORKFLOW.md)** - Demo-specific issues
-
-
-## Requirements Satisfied
-
-This prototype satisfies the following requirements from the specification:
-
-### Infrastructure Requirements
-- **Requirement 1**: GCP VM Provisioning - Ubuntu VMs provisioned with Terraform ✓
-- **Requirement 2**: OS Patch Management Configuration - GCP OS Config configured ✓
-- **Requirement 3**: Terraform Actions Integration - Actions trigger AAP workflows ✓
-- **Requirement 4**: Ansible Playbook Implementation - Patching playbook implemented ✓
-- **Requirement 5**: AAP Configuration - Job templates and credentials configured ✓
-- **Requirement 6**: HCP Terraform Workspace Setup - Workspace configured with Vault ✓
-- **Requirement 7**: GCP Project Configuration - APIs enabled, IAM configured ✓
-
-### Security Requirements
-- **Requirement 8**: Authentication and Security - All credentials in Vault ✓
-  - 8.1: Credentials retrieved from Vault
-  - 8.2: No plaintext credentials in code
-  - 8.3: Service account keys from Vault
-  - 8.4: API token authentication
-  - 8.5: Least privilege IAM permissions
-
-### Documentation Requirements
-- **Requirement 9**: Documentation and Setup ✓
-  - 9.1: AAP setup instructions (docs/AAP_SETUP.md)
-  - 9.2: GCP project setup steps (docs/GCP_SETUP.md)
-  - 9.3: HCP Terraform workspace configuration
-  - 9.4: Prerequisites and dependencies (this README)
-  - 9.5: Troubleshooting guidance (this README + docs/)
-  - 9.6: Demonstration workflow steps (docs/DEMO_WORKFLOW.md)
-
-### Demo Requirements
-- **Requirement 10**: Demo Readiness ✓
-  - 10.1: Complete Day 0 through Day 2 workflow
-  - 10.2: VM provisioning in under 5 minutes
-  - 10.3: AAP job execution triggered from Terraform
-  - 10.4: Simple enough to explain in 15-minute demo
-
-
-## Additional Resources
-
-### Documentation
-
-- **[GCP Setup Guide](docs/GCP_SETUP.md)** - Detailed GCP project configuration
-- **[AAP Setup Guide](docs/AAP_SETUP.md)** - Comprehensive AAP configuration
-- **[Demo Workflow Guide](docs/DEMO_WORKFLOW.md)** - Complete demonstration workflow
-- **[Testing Documentation](tests/README.md)** - Testing strategy and CI/CD integration
-
-### Specification Documents
-
-- **[Requirements](. kiro/specs/terraform-actions-gcp-patching/requirements.md)** - Complete requirements specification
-- **[Design](. kiro/specs/terraform-actions-gcp-patching/design.md)** - Detailed design document with architecture
-- **[Tasks](. kiro/specs/terraform-actions-gcp-patching/tasks.md)** - Implementation task list
-
-### External Resources
-
-- **[Terraform Actions Documentation](https://www.terraform.io/docs/cloud/actions)** - Official Terraform Actions docs
-- **[HCP Terraform Documentation](https://www.terraform.io/cloud-docs)** - HCP Terraform platform docs
-- **[GCP Compute Engine Documentation](https://cloud.google.com/compute/docs)** - GCP VM documentation
-- **[GCP OS Config Documentation](https://cloud.google.com/compute/docs/os-config-management)** - OS patching docs
-- **[Ansible Automation Platform Documentation](https://docs.ansible.com/automation-controller/)** - AAP docs
-- **[HashiCorp Vault Documentation](https://www.vaultproject.io/docs)** - Vault secrets management
-- **[Ansible Best Practices](https://docs.ansible.com/ansible/latest/user_guide/playbooks_best_practices.html)** - Playbook guidelines
-- **[GCP IAM Best Practices](https://cloud.google.com/iam/docs/best-practices)** - Security best practices
-
-### Support and Contribution
-
-This is a prototype for demonstration purposes. For questions or issues:
-
-1. Review the troubleshooting sections in this README and setup guides
-2. Check the specification documents for design decisions
-3. Review the property-based tests for expected behavior
-4. Consult the external resources for platform-specific documentation
-
-
-## Project Metadata
-
-**Project Type**: Prototype / Demonstration  
-**Target Audience**: Solutions architects, platform engineers, DevOps teams  
-**Complexity**: Intermediate  
-**Estimated Setup Time**: 1-2 hours (first time), 15 minutes (demo)  
-**Maintenance**: Minimal (rotate credentials every 90 days)
-
-### Technology Stack
-
-- **Infrastructure**: Terraform 1.7+, HCP Terraform
-- **Cloud Platform**: Google Cloud Platform
-- **Configuration Management**: Ansible 2.14+, Ansible Automation Platform 2.4+
-- **Secrets Management**: HashiCorp Vault Enterprise
-- **Testing**: Python 3.9+, pytest, Hypothesis
-- **Operating System**: Ubuntu 22.04 LTS
-
-### Version History
-
-- **v1.0** (2024-01-15): Initial release
-  - Day 0/1 provisioning with Terraform
-  - Day 2 operations with Terraform Actions
-  - Vault integration for credential management
-  - Comprehensive documentation and testing
-
-### License
-
-This is a prototype for demonstration purposes. Use at your own discretion.
-
-### Acknowledgments
-
-This prototype demonstrates integration between:
-- HashiCorp Terraform and HCP Terraform
-- HashiCorp Vault Enterprise
-- Red Hat Ansible Automation Platform
-- Google Cloud Platform
-
----
-
-**Ready to get started?** Follow the [Quick Start](#quick-start) guide above, or dive into the detailed [Setup Guides](#setup-guides).
-
-**Questions?** Check the [Troubleshooting](#troubleshooting) section or review the [Additional Resources](#additional-resources).
-
-**Want to see it in action?** Follow the [Demo Workflow Guide](docs/DEMO_WORKFLOW.md) for a complete 15-minute demonstration.
+For issues and questions:
+- Check [documentation](docs/)
+- Review [troubleshooting](#troubleshooting)
+- Open an issue in the repository
