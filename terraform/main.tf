@@ -165,7 +165,7 @@ resource "google_os_config_patch_deployment" "ubuntu_patches" {
   # One-time schedule for on-demand execution
   # Requirement 2.3: Use on-demand execution mode for demonstration
   one_time_schedule {
-    execute_time = "2024-12-31T23:59:59Z" # Placeholder - manual trigger via Actions
+    execute_time = "2026-12-31T23:59:59Z" # Placeholder - manual trigger via Actions
   }
 
   description = "Patch deployment for Ubuntu VMs in demo environment"

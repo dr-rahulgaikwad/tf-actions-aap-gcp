@@ -189,30 +189,45 @@ terraform-actions-gcp-patching/
 
 ## Quick Start
 
+> **📋 For complete step-by-step setup instructions, see [SETUP_STEPS.md](SETUP_STEPS.md)**
+
 ### Step 1: Set Up GCP Project
 
-1. Create or select a GCP project
-2. Enable required APIs:
+1. Enable required APIs:
    ```bash
    export PROJECT_ID="your-gcp-project-id"
-   gcloud services enable compute.googleapis.com --project=${PROJECT_ID}
-   gcloud services enable osconfig.googleapis.com --project=${PROJECT_ID}
+   gcloud services enable compute.googleapis.com
+   gcloud services enable osconfig.googleapis.com
+   gcloud services enable iam.googleapis.com
    ```
 
-3. Create service account with minimal permissions:
+2. Grant IAM permissions to your service account:
    ```bash
-   export SA_NAME="terraform-automation"
-   gcloud iam service-accounts create ${SA_NAME} --project=${PROJECT_ID}
+   export SA_EMAIL="your-sa@your-project.iam.gserviceaccount.com"
    
-   # Grant required roles
-   gcloud projects add-iam-policy-binding ${PROJECT_ID} \
-     --member="serviceAccount:${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com" \
+   gcloud projects add-iam-policy-binding $PROJECT_ID \
+     --member="serviceAccount:${SA_EMAIL}" \
      --role="roles/compute.instanceAdmin.v1"
+   
+   gcloud projects add-iam-policy-binding $PROJECT_ID \
+     --member="serviceAccount:${SA_EMAIL}" \
+     --role="roles/compute.networkAdmin"
+   
+   gcloud projects add-iam-policy-binding $PROJECT_ID \
+     --member="serviceAccount:${SA_EMAIL}" \
+     --role="roles/osconfig.patchDeploymentAdmin"
    ```
 
-4. Generate and store service account key in Vault
+3. Create service account key and store in Vault:
+   ```bash
+   gcloud iam service-accounts keys create terraform-sa-key.json \
+     --iam-account="${SA_EMAIL}"
+   
+   vault kv put secret/gcp/service-account @terraform-sa-key.json
+   rm terraform-sa-key.json
+   ```
 
-**For detailed instructions, see [docs/GCP_SETUP.md](docs/GCP_SETUP.md)**
+**For detailed instructions, see [SETUP_STEPS.md](SETUP_STEPS.md) or [docs/GCP_SETUP.md](docs/GCP_SETUP.md)**
 
 ### Step 2: Configure Ansible Automation Platform
 
@@ -231,80 +246,63 @@ Store all required credentials in HashiCorp Vault:
 
 ```bash
 export VAULT_ADDR="https://vault.example.com:8200"
+export VAULT_NAMESPACE="admin"  # For HCP Vault
 vault login
 
-# Store GCP service account key
-vault kv put secret/gcp/service-account \
-  key=@/path/to/service-account-key.json \
-  project_id=${PROJECT_ID}
+# Store GCP service account key (entire JSON file)
+vault kv put secret/gcp/service-account @terraform-sa-key.json
 
 # Store AAP API token
-vault kv put secret/aap/api-token \
-  token="<your-aap-token>" \
-  url="https://aap.example.com"
+vault kv put secret/aap/api-token token="<your-aap-token>"
 
-# Store SSH private key
+# Store SSH keys
 vault kv put secret/ssh/ubuntu-key \
-  private_key=@/path/to/private-key \
-  public_key=@/path/to/public-key.pub
+  private_key=@$HOME/.ssh/ubuntu-patching-demo \
+  public_key=@$HOME/.ssh/ubuntu-patching-demo.pub
 ```
 
+**Important**: Store the GCP service account JSON directly (not under a "key" field).
 
-### Step 4: Configure Terraform Variables
 
-1. Copy the example variables file:
-   ```bash
-   cd terraform/
-   cp terraform.tfvars.example terraform.tfvars
-   ```
+### Step 4: Configure HCP Terraform Workspace
 
-2. Edit `terraform.tfvars` with your values:
-   ```hcl
-   # GCP Configuration
-   gcp_project_id = "your-gcp-project-id"
-   gcp_region     = "us-central1"
-   gcp_zone       = "us-central1-a"
-   
-   # VM Configuration
-   vm_count        = 2
-   vm_machine_type = "e2-medium"
-   
-   # Vault Configuration
-   vault_addr            = "https://vault.example.com:8200"
-   vault_gcp_secret_path = "secret/gcp/service-account"
-   vault_aap_token_path  = "secret/aap/api-token"
-   vault_ssh_key_path    = "secret/ssh/ubuntu-key"
-   
-   # AAP Configuration
-   aap_api_url         = "https://aap.example.com"
-   aap_job_template_id = 42  # Your job template ID
-   
-   # Resource Tagging
-   environment = "demo"
-   managed_by  = "terraform"
-   ```
+**Set variables in HCP Terraform workspace UI:**
+
+Go to: `https://app.terraform.io/app/<your-org>/<your-workspace>/variables`
+
+**Terraform Variables:**
+- `gcp_project_id` = "your-gcp-project-id"
+- `vault_addr` = "https://vault.example.com:8200"
+- `aap_api_url` = "https://aap.example.com/api/controller/v2"
+- `aap_job_template_id` = 42 (your job template ID)
+
+**Environment Variables:**
+- `VAULT_TOKEN` = "your-vault-token" (mark as sensitive)
+- `VAULT_NAMESPACE` = "admin" (mark as sensitive, for HCP Vault)
+
+**For complete variable list, see [SETUP_STEPS.md](SETUP_STEPS.md)**
 
 ### Step 5: Deploy Infrastructure
 
-1. Initialize Terraform:
+Since you're using HCP Terraform with VCS connection:
+
+1. **Commit and push your code**:
    ```bash
-   terraform init
+   git add -A
+   git commit -m "feat: Initial infrastructure setup"
+   git push origin main
    ```
 
-2. Review the execution plan:
-   ```bash
-   terraform plan
-   ```
+2. **Monitor the run in HCP Terraform**:
+   - Go to your workspace in HCP Terraform UI
+   - A run will trigger automatically
+   - Review the plan
+   - Click "Confirm & Apply"
+   - Wait for completion (~3-5 minutes)
 
-3. Apply the configuration:
-   ```bash
-   terraform apply
-   ```
-
-4. Note the outputs (VM IPs, instance IDs):
-   ```bash
-   terraform output
-   ```
+3. **View outputs**:
+   - Check the outputs in HCP Terraform UI
+   - Or use: `terraform output` (if running locally)
 
 
 ### Step 6: Trigger Day 2 Operations
