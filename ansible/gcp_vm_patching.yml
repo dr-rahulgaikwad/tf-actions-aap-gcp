@@ -3,8 +3,22 @@
 # This playbook performs OS patching operations on Ubuntu VMs
 # Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6
 
+- name: Add VMs to inventory dynamically
+  hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Add hosts from vm_inventory
+      add_host:
+        name: "{{ item.key }}"
+        ansible_host: "{{ item.value.ansible_host }}"
+        ansible_user: "{{ item.value.ansible_user }}"
+        ansible_ssh_common_args: "{{ item.value.ansible_ssh_common_args | default('-o StrictHostKeyChecking=no') }}"
+        groups: gcp_vms
+      loop: "{{ vm_inventory.all.hosts | dict2items }}"
+      when: vm_inventory is defined
+
 - name: Patch Ubuntu VMs
-  hosts: all
+  hosts: gcp_vms
   become: yes
   gather_facts: yes
   
