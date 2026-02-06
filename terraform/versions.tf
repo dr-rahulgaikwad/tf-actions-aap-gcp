@@ -50,7 +50,7 @@ provider "vault" {
 # Authenticates to GCP using service account credentials retrieved from Vault
 # Requirements: 6.2, 8.1
 provider "google" {
-  credentials = data.vault_generic_secret.gcp_credentials.data["key"]
+  credentials = jsonencode(data.vault_generic_secret.gcp_credentials.data)
   project     = var.gcp_project_id
   region      = var.gcp_region
   zone        = var.gcp_zone
