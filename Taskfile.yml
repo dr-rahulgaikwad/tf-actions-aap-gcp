@@ -1,98 +1,61 @@
 version: '3'
 
-# Taskfile for Terraform Actions GCP Patching Prototype
-# Automates common development and deployment tasks
-# Install Task: https://taskfile.dev/installation/
+# Taskfile for Terraform Actions GCP Patching
+# Automates setup, testing, and deployment tasks
 
 vars:
   TERRAFORM_DIR: terraform
   TESTS_DIR: tests
-  SCRIPTS_DIR: scripts
 
 tasks:
-  # ============================================================================
   # Setup Tasks
-  # ============================================================================
-  
   setup:
-    desc: "Complete setup - configure GCP service account, Vault, and Terraform"
+    desc: "Complete setup - GCP, Vault, and Terraform"
     cmds:
       - task: check-prereqs
-      - task: gcp-setup
-      - task: vault-setup
-      - task: tf-init
       - echo ""
-      - echo "✓ Setup complete! Next steps:"
-      - echo "  1. Verify Vault secrets: task vault-verify"
-      - echo "  2. Run Terraform plan: task tf-plan"
-      - echo "  3. Deploy: git add . && git commit && git push"
+      - echo "Run these tasks in order:"
+      - echo "  1. task gcp-setup       # Configure GCP service account"
+      - echo "  2. task gcp-create-key  # Create and store key in Vault"
+      - echo "  3. task vault-setup     # Store AAP and SSH credentials"
+      - echo "  4. task vault-verify    # Verify all secrets"
+      - echo "  5. task tf-init         # Initialize Terraform"
 
   gcp-setup:
     desc: "Setup GCP service account with required permissions"
     cmds:
-      - echo "=== GCP Service Account Setup ==="
-      - echo ""
-      - echo "Setting up service account: terraform-automation"
       - |
         export PROJECT_ID="${PROJECT_ID:-hc-4faa1ac49a5e46ecb46cfe87b37}"
         export SA_NAME="terraform-automation"
         export SA_EMAIL="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
         
+        echo "=== GCP Service Account Setup ==="
         echo "Project: ${PROJECT_ID}"
         echo "Service Account: ${SA_EMAIL}"
         echo ""
         
-        # Set project
         gcloud config set project "${PROJECT_ID}"
         
-        # Enable required APIs
-        echo "Enabling required GCP APIs..."
-        gcloud services enable compute.googleapis.com
-        gcloud services enable osconfig.googleapis.com
-        gcloud services enable iam.googleapis.com
+        echo "Enabling APIs..."
+        gcloud services enable compute.googleapis.com osconfig.googleapis.com iam.googleapis.com
         
-        # Create service account if it doesn't exist
-        echo "Creating service account (if not exists)..."
+        echo "Creating service account..."
         gcloud iam service-accounts create "${SA_NAME}" \
-          --display-name="Terraform Automation Service Account" \
-          --description="Service account for Terraform to manage GCP resources" \
-          2>/dev/null || echo "Service account already exists"
+          --display-name="Terraform Automation" 2>/dev/null || echo "Already exists"
         
-        # Grant required roles
         echo "Granting IAM roles..."
-        gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
-          --member="serviceAccount:${SA_EMAIL}" \
-          --role="roles/compute.instanceAdmin.v1" \
-          --condition=None
-        
-        gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
-          --member="serviceAccount:${SA_EMAIL}" \
-          --role="roles/compute.networkAdmin" \
-          --condition=None
-        
-        gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
-          --member="serviceAccount:${SA_EMAIL}" \
-          --role="roles/compute.securityAdmin" \
-          --condition=None
-        
-        gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
-          --member="serviceAccount:${SA_EMAIL}" \
-          --role="roles/osconfig.patchDeploymentAdmin" \
-          --condition=None
-        
-        gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
-          --member="serviceAccount:${SA_EMAIL}" \
-          --role="roles/iam.serviceAccountUser" \
-          --condition=None
+        for role in compute.instanceAdmin.v1 compute.networkAdmin compute.securityAdmin osconfig.patchDeploymentAdmin iam.serviceAccountUser; do
+          gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
+            --member="serviceAccount:${SA_EMAIL}" \
+            --role="roles/${role}" --condition=None --quiet
+        done
         
         echo ""
         echo "✓ GCP service account configured"
-        echo ""
-        echo "Next: Create and store service account key in Vault"
-        echo "  task gcp-create-key"
+        echo "Next: task gcp-create-key"
     preconditions:
       - sh: command -v gcloud
-        msg: "gcloud CLI not found. Install from https://cloud.google.com/sdk/docs/install"
+        msg: "gcloud CLI not found"
 
   gcp-create-key:
     desc: "Create service account key and store in Vault"
@@ -102,75 +65,53 @@ tasks:
         export SA_EMAIL="terraform-automation@${PROJECT_ID}.iam.gserviceaccount.com"
         export KEY_FILE="terraform-sa-key.json"
         
-        echo "Creating service account key..."
-        gcloud iam service-accounts keys create "${KEY_FILE}" \
-          --iam-account="${SA_EMAIL}"
+        echo "Creating key..."
+        gcloud iam service-accounts keys create "${KEY_FILE}" --iam-account="${SA_EMAIL}"
         
-        echo "Storing key in Vault..."
+        echo "Storing in Vault..."
         vault kv put secret/gcp/service-account @"${KEY_FILE}"
         
         echo "Verifying..."
         vault kv get secret/gcp/service-account | grep project_id
         
-        echo "Cleaning up local key..."
         rm "${KEY_FILE}"
-        
-        echo ""
-        echo "✓ Service account key stored in Vault"
+        echo "✓ Key stored in Vault and local file deleted"
     preconditions:
-      - sh: command -v vault
-        msg: "Vault CLI not found"
-      - sh: vault status
-        msg: "Cannot connect to Vault. Check VAULT_ADDR and VAULT_TOKEN"
+      - sh: command -v vault && vault status
+        msg: "Vault CLI not found or cannot connect"
 
   vault-setup:
-    desc: "Setup Vault secrets (interactive guide)"
+    desc: "Guide for storing AAP and SSH credentials in Vault"
     cmds:
       - echo "=== Vault Secrets Setup ==="
       - echo ""
-      - vault status
+      - echo "Store these secrets in Vault"
       - echo ""
-      - echo "Required secrets:"
+      - echo "1. AAP API Token"
+      - echo "   vault kv put secret/aap/api-token token=YOUR_TOKEN"
       - echo ""
-      - echo "1. GCP Service Account (if not done via gcp-create-key):"
-      - echo "   vault kv put secret/gcp/service-account @terraform-sa-key.json"
-      - echo ""
-      - echo "2. AAP API Token:"
-      - echo "   vault kv put secret/aap/api-token token=YOUR_AAP_TOKEN"
-      - echo ""
-      - echo "3. SSH Keys:"
+      - echo "2. SSH Keys"
       - echo "   ssh-keygen -t rsa -b 4096 -f ~/.ssh/ubuntu-patching -N ''"
-      - echo "   vault kv put secret/ssh/ubuntu-key \\"
-      - echo "     private_key=@~/.ssh/ubuntu-patching \\"
-      - echo "     public_key=@~/.ssh/ubuntu-patching.pub"
+      - echo "   vault kv put secret/ssh/ubuntu-key private_key=@~/.ssh/ubuntu-patching public_key=@~/.ssh/ubuntu-patching.pub"
       - echo ""
-      - echo "Verify with: task vault-verify"
-    preconditions:
-      - sh: command -v vault
-        msg: "Vault CLI not found. Install from https://www.vaultproject.io/downloads"
+      - echo "Then verify with task vault-verify"
 
   vault-verify:
     desc: "Verify all Vault secrets are configured"
     cmds:
       - echo "=== Verifying Vault Secrets ==="
       - echo ""
-      - echo "1. GCP Service Account:"
-      - vault kv get secret/gcp/service-account | grep -E "(project_id|client_email)" || echo "  ✗ Not found"
+      - echo "GCP Service Account:"
+      - vault kv get secret/gcp/service-account | grep project_id || echo "  Not found"
       - echo ""
-      - echo "2. AAP API Token:"
-      - vault kv get secret/aap/api-token | grep token || echo "  ✗ Not found"
+      - echo "AAP API Token:"
+      - vault kv get secret/aap/api-token | grep token || echo "  Not found"
       - echo ""
-      - echo "3. SSH Keys:"
-      - vault kv get secret/ssh/ubuntu-key | grep -E "(private_key|public_key)" || echo "  ✗ Not found"
+      - echo "SSH Keys:"
+      - vault kv get secret/ssh/ubuntu-key | grep private_key || echo "  Not found"
       - echo ""
-    preconditions:
-      - sh: command -v vault
-        msg: "Vault CLI not found"
 
-  # ============================================================================
   # Terraform Tasks
-  # ============================================================================
-
   tf-init:
     desc: "Initialize Terraform"
     dir: "{{.TERRAFORM_DIR}}"
@@ -178,57 +119,28 @@ tasks:
       - terraform init
 
   tf-validate:
-    desc: "Validate Terraform configuration"
+    desc: "Validate and format Terraform"
     dir: "{{.TERRAFORM_DIR}}"
-    cmds:
-      - terraform validate
-      - terraform fmt -check -recursive
-
-  tf-fmt:
-    desc: "Format Terraform files"
-    dir: "{{.TERRAFORM_DIR}}"
+    deps:
+      - tf-init
     cmds:
       - terraform fmt -recursive
+      - terraform validate
 
   tf-plan:
-    desc: "Run Terraform plan"
+    desc: "Run Terraform plan (local)"
     dir: "{{.TERRAFORM_DIR}}"
     cmds:
       - terraform plan
-
-  tf-apply:
-    desc: "Apply Terraform configuration (via HCP Terraform)"
-    dir: "{{.TERRAFORM_DIR}}"
-    cmds:
-      - echo "⚠️  This workspace is connected to VCS"
-      - echo "To apply changes:"
-      - echo "1. Commit and push your changes: git add . && git commit -m 'message' && git push"
-      - echo "2. Go to HCP Terraform: https://app.terraform.io/app/rahul-tfc/workspaces/tf-actions-aap-gcp"
-      - echo "3. Review the auto-triggered plan"
-      - echo "4. Click 'Confirm & Apply'"
-
-  tf-destroy:
-    desc: "Destroy Terraform-managed infrastructure"
-    dir: "{{.TERRAFORM_DIR}}"
-    cmds:
-      - echo "⚠️  WARNING: This will destroy all infrastructure!"
-      - echo "To destroy via HCP Terraform:"
-      - echo "1. Go to: https://app.terraform.io/app/rahul-tfc/workspaces/tf-actions-aap-gcp/settings/destruction-and-deletion"
-      - echo "2. Queue destroy plan"
-      - echo "3. Confirm destruction"
-    interactive: true
 
   tf-clean:
     desc: "Clean Terraform temporary files"
     dir: "{{.TERRAFORM_DIR}}"
     cmds:
       - rm -rf .terraform .terraform.lock.hcl
-      - echo "✓ Terraform temporary files cleaned"
+      - echo "✓ Cleaned"
 
-  # ============================================================================
   # Testing Tasks
-  # ============================================================================
-
   test:
     desc: "Run all tests"
     cmds:
@@ -237,7 +149,7 @@ tasks:
       - task: test-python
 
   test-terraform:
-    desc: "Validate Terraform configuration"
+    desc: "Validate Terraform"
     dir: "{{.TESTS_DIR}}"
     cmds:
       - chmod +x validate_terraform.sh
@@ -251,124 +163,37 @@ tasks:
       - ./validate_ansible.sh
 
   test-python:
-    desc: "Run Python property-based tests"
+    desc: "Run property-based tests"
     dir: "{{.TESTS_DIR}}"
     cmds:
       - |
         if [ ! -d "venv" ]; then
-          echo "Creating Python virtual environment..."
           python3 -m venv venv
-          ./venv/bin/pip install -r requirements.txt
+          ./venv/bin/pip install -q -r requirements.txt
         fi
-      - ./venv/bin/pytest -v
+        ./venv/bin/pytest -v
     preconditions:
       - sh: command -v python3
         msg: "Python 3 not found"
 
-  test-clean:
-    desc: "Clean test artifacts"
-    dir: "{{.TESTS_DIR}}"
-    cmds:
-      - rm -rf __pycache__ .pytest_cache .hypothesis venv
-      - echo "✓ Test artifacts cleaned"
-
-  # ============================================================================
-  # Git Tasks
-  # ============================================================================
-
-  git-status:
-    desc: "Check git status and show what will be committed"
-    cmds:
-      - git status
-      - echo ""
-      - echo "Files to be committed:"
-      - git diff --name-only --cached
-
-  git-commit:
-    desc: "Commit changes with automated GCP setup"
-    cmds:
-      - task: clean
-      - task: tf-fmt
-      - git add .
-      - git commit -m "feat: Add automated GCP setup with Vault integration"
-      - echo ""
-      - echo "✓ Changes committed"
-      - echo "Run 'task git-push' to push to remote"
-
-  git-push:
-    desc: "Push changes to remote repository"
-    cmds:
-      - git push origin main
-      - echo ""
-      - echo "✓ Changes pushed to remote"
-      - echo "HCP Terraform will auto-trigger a plan"
-      - echo "Monitor at: https://app.terraform.io/app/rahul-tfc/workspaces/tf-actions-aap-gcp"
-
-  # ============================================================================
   # Cleanup Tasks
-  # ============================================================================
-
   clean:
-    desc: "Clean all temporary files and artifacts"
+    desc: "Clean all temporary files"
     cmds:
       - task: tf-clean
-      - task: test-clean
+      - rm -rf {{.TESTS_DIR}}/__pycache__ {{.TESTS_DIR}}/.pytest_cache {{.TESTS_DIR}}/.hypothesis {{.TESTS_DIR}}/venv
       - echo "✓ All temporary files cleaned"
 
-  # ============================================================================
-  # Documentation Tasks
-  # ============================================================================
-
-  docs:
-    desc: "Open documentation in browser"
-    cmds:
-      - echo "Documentation:"
-      - echo "  README.md - Project overview"
-      - echo "  docs/AUTOMATED_SETUP.md - Automated setup guide"
-      - echo "  docs/GCP_SETUP.md - GCP configuration"
-      - echo "  docs/AAP_SETUP.md - AAP configuration"
-      - echo "  docs/DEMO_WORKFLOW.md - Demo walkthrough"
-
-  # ============================================================================
-  # Deployment Tasks
-  # ============================================================================
-
-  deploy:
-    desc: "Full deployment workflow"
-    cmds:
-      - echo "=== Terraform Actions GCP Patching Deployment ==="
-      - echo ""
-      - echo "Step 1: Validate configuration"
-      - task: tf-validate
-      - echo ""
-      - echo "Step 2: Run tests"
-      - task: test
-      - echo ""
-      - echo "Step 3: Commit and push"
-      - task: git-commit
-      - task: git-push
-      - echo ""
-      - echo "✓ Deployment initiated"
-      - echo "Monitor progress in HCP Terraform"
-
-  # ============================================================================
   # Utility Tasks
-  # ============================================================================
-
   check-prereqs:
-    desc: "Check if all prerequisites are installed"
+    desc: "Check prerequisites"
     cmds:
       - echo "Checking prerequisites..."
-      - echo -n "  gcloud: "
-      - command -v gcloud && echo "✓" || echo "✗ (install from https://cloud.google.com/sdk/docs/install)"
-      - echo -n "  terraform: "
-      - command -v terraform && echo "✓" || echo "✗ (install from https://www.terraform.io/downloads)"
-      - echo -n "  vault: "
-      - command -v vault && echo "✓" || echo "✗ (install from https://www.vaultproject.io/downloads)"
-      - echo -n "  python3: "
-      - command -v python3 && echo "✓" || echo "✗"
-      - echo -n "  git: "
-      - command -v git && echo "✓" || echo "✗"
+      - |
+        for cmd in gcloud terraform vault python3 git; do
+          echo -n "  $cmd: "
+          command -v $cmd >/dev/null 2>&1 && echo "✓" || echo "✗"
+        done
 
   help:
     desc: "Show available tasks"
