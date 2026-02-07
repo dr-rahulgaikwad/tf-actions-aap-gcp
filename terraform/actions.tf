@@ -42,19 +42,12 @@ action "aap_job_launch" "patch_vms" {
 # Trigger action automatically after VM creation/update
 resource "terraform_data" "trigger_patch" {
   input = {
-    vm_count     = length(google_compute_instance.ubuntu_vms)
-    vm_names     = [for vm in google_compute_instance.ubuntu_vms : vm.name]
-    vm_ids       = [for vm in google_compute_instance.ubuntu_vms : vm.id]
-    trigger_time = timestamp()
+    vm_count = length(google_compute_instance.ubuntu_vms)
+    vm_names = [for vm in google_compute_instance.ubuntu_vms : vm.name]
+    vm_ids   = [for vm in google_compute_instance.ubuntu_vms : vm.id]
   }
 
-  depends_on = [google_compute_instance.ubuntu_vms]
-
   lifecycle {
-    replace_triggered_by = [
-      google_compute_instance.ubuntu_vms
-    ]
-    
     action_trigger {
       events  = [after_create, after_update]
       actions = [action.aap_job_launch.patch_vms]
