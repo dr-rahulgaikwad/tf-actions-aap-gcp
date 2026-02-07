@@ -21,7 +21,7 @@ variable "gcp_zone" {
 variable "vm_count" {
   description = "Number of Ubuntu VMs to provision"
   type        = number
-  default     = 2
+  default     = 3
 
   validation {
     condition     = var.vm_count > 0 && var.vm_count <= 10
