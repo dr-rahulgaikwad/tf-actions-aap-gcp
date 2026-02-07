@@ -9,6 +9,10 @@ terraform {
   }
 
   required_providers {
+    tfe = {
+      source  = "hashicorp/tfe"
+      version = "0.73.0"
+    }
     google = {
       source  = "hashicorp/google"
       version = "~> 5.0"
@@ -23,6 +27,7 @@ terraform {
     }
   }
 }
+
 
 provider "vault" {
   address   = var.vault_addr
@@ -40,6 +45,8 @@ provider "google" {
 provider "aap" {
   host  = var.aap_hostname
   token = data.vault_generic_secret.aap_token.data["token"]
-  # Note: Set AAP_INSECURE_SKIP_VERIFY=true environment variable in HCP Terraform workspace
-  # for self-signed certificates
+}
+
+provider "tfe" {
+  # TFE_TOKEN environment variable should be set
 }

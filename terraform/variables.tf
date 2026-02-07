@@ -101,3 +101,13 @@ variable "managed_by" {
   type        = string
   default     = "terraform"
 }
+
+variable "tf_organization_name" {
+  description = "TFE organization name"
+  type        = string
+}
+
+variable "tf_project_name" {
+  description = "TF project name"
+  type        = string
+}
