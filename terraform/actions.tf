@@ -33,7 +33,7 @@ locals {
 action "aap_job_launch" "patch_vms" {
   config {
     job_template_id                     = var.aap_job_template_id
-    wait_for_completion                 = true
+    wait_for_completion                 = true  # Set to true once AAP job template is verified
     wait_for_completion_timeout_seconds = 600
     extra_vars                          = jsonencode(local.extra_vars)
   }

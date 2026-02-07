@@ -11,7 +11,7 @@ vm_machine_type = "e2-medium"
 vault_addr = "https://your-vault-cluster.vault.hashicorp.cloud:8200"
 
 # AAP Configuration
-aap_hostname        = "https://sandbox-aap-dr-rahul-gaikwad-dev.apps.rm2.thpm.p1.openshiftapps.com"
+aap_hostname        = "https://your-aap-hostname.com"
 aap_job_template_id = 10
 
 # Resource Labels
