@@ -102,12 +102,105 @@ variable "managed_by" {
   default     = "terraform"
 }
 
+
+# HCP Terraform Setup Variables
 variable "tf_organization_name" {
-  description = "TFE organization name"
+  description = "HCP Terraform organization name"
+  type        = string
+  default     = "rahul-tfc"
+}
+
+variable "github_token" {
+  description = "GitHub personal access token for OAuth"
+  type        = string
+  sensitive   = true
+}
+
+variable "github_repo" {
+  description = "GitHub repository identifier (org/repo)"
   type        = string
 }
 
-variable "tf_project_name" {
-  description = "TF project name"
+
+# TFC Project Configuration
+variable "tfc_project_name" {
+  description = "HCP Terraform project name"
   type        = string
+  default     = "terraform-actions-aap-gcp"
+}
+
+variable "tfc_project_description" {
+  description = "HCP Terraform project description"
+  type        = string
+  default     = "Terraform Actions demo with AAP and GCP for VM patching"
+}
+
+# TFC Workspace Configuration
+variable "tfc_workspace_name" {
+  description = "HCP Terraform workspace name"
+  type        = string
+  default     = "tf-actions-aap-gcp"
+}
+
+variable "tfc_workspace_description" {
+  description = "HCP Terraform workspace description"
+  type        = string
+  default     = "Demo workspace for Terraform Actions with AAP and GCP"
+}
+
+variable "tfc_working_directory" {
+  description = "Working directory for Terraform workspace"
+  type        = string
+  default     = "terraform"
+}
+
+variable "tfc_auto_apply" {
+  description = "Enable auto-apply for workspace"
+  type        = bool
+  default     = false
+}
+
+variable "tfc_queue_all_runs" {
+  description = "Queue all runs for workspace"
+  type        = bool
+  default     = false
+}
+
+# GitHub OAuth Configuration
+variable "github_api_url" {
+  description = "GitHub API URL"
+  type        = string
+  default     = "https://api.github.com"
+}
+
+variable "github_http_url" {
+  description = "GitHub HTTP URL"
+  type        = string
+  default     = "https://github.com"
+}
+
+variable "github_service_provider" {
+  description = "GitHub service provider type"
+  type        = string
+  default     = "github"
+}
+
+variable "github_organization_scoped" {
+  description = "Whether OAuth client is scoped to all projects and workspaces"
+  type        = bool
+  default     = true
+}
+
+# TFC Environment Variables
+variable "aap_insecure_skip_verify" {
+  description = "Skip TLS verification for AAP"
+  type        = string
+  default     = "true"
+}
+
+variable "tfe_token" {
+  description = "Terraform Cloud/Enterprise API token"
+  type        = string
+  sensitive   = true
+  default     = ""
 }

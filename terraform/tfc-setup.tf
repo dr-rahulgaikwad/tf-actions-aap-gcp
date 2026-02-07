@@ -1,31 +1,41 @@
-# HCP Terraform Project and Workspace Setup
-# This file creates the TFC project, workspace, and variables
+# HCP Terraform Setup - Fully Automated
+# This file creates TFC project, workspace, and configures all variables
+
+# Create GitHub OAuth Client
+resource "tfe_oauth_client" "github" {
+  organization        = var.tf_organization_name
+  organization_scoped = var.github_organization_scoped
+  api_url             = var.github_api_url
+  http_url            = var.github_http_url
+  oauth_token         = var.github_token
+  service_provider    = var.github_service_provider
+}
 
 # Create HCP Terraform Project
 resource "tfe_project" "aap_gcp_patching" {
-  organization = "rahul-tfc"
-  name         = "terraform-actions-aap-gcp"
-  description  = "Terraform Actions demo with AAP and GCP for VM patching"
+  organization = var.tf_organization_name
+  name         = var.tfc_project_name
+  description  = var.tfc_project_description
 }
 
 # Create HCP Terraform Workspace
 resource "tfe_workspace" "main" {
-  organization = "rahul-tfc"
+  organization = var.tf_organization_name
   project_id   = tfe_project.aap_gcp_patching.id
-  name         = "tf-actions-aap-gcp"
-  description  = "Demo workspace for Terraform Actions with AAP and GCP"
+  name         = var.tfc_workspace_name
+  description  = var.tfc_workspace_description
 
   vcs_repo {
-    identifier     = "your-github-org/tf-actions-aap-gcp"  # Update with your repo
-    oauth_token_id = var.tfc_oauth_token_id
+    identifier     = var.github_repo
+    oauth_token_id = tfe_oauth_client.github.oauth_token_id
   }
 
-  working_directory = "terraform"
-  auto_apply        = false
-  queue_all_runs    = false
+  working_directory = var.tfc_working_directory
+  auto_apply        = var.tfc_auto_apply
+  queue_all_runs    = var.tfc_queue_all_runs
 }
 
-# Terraform Variables
+# Terraform Variables in Workspace
 resource "tfe_variable" "vault_addr" {
   workspace_id = tfe_workspace.main.id
   key          = "vault_addr"
@@ -45,7 +55,7 @@ resource "tfe_variable" "aap_hostname" {
 resource "tfe_variable" "aap_job_template_id" {
   workspace_id = tfe_workspace.main.id
   key          = "aap_job_template_id"
-  value        = var.aap_job_template_id
+  value        = tostring(var.aap_job_template_id)
   category     = "terraform"
   description  = "AAP job template ID"
 }
@@ -79,9 +89,19 @@ resource "tfe_variable" "vault_namespace" {
 resource "tfe_variable" "aap_insecure_skip_verify" {
   workspace_id = tfe_workspace.main.id
   key          = "AAP_INSECURE_SKIP_VERIFY"
-  value        = "true"
+  value        = var.aap_insecure_skip_verify
   category     = "env"
   description  = "Skip TLS verification for AAP (for self-signed certs)"
+}
+
+resource "tfe_variable" "tfe_token" {
+  count        = var.tfe_token != "" ? 1 : 0
+  workspace_id = tfe_workspace.main.id
+  key          = "TFE_TOKEN"
+  value        = var.tfe_token
+  category     = "env"
+  sensitive    = true
+  description  = "Terraform Cloud API token for TFE provider"
 }
 
 # Outputs
@@ -97,5 +117,10 @@ output "tfc_workspace_id" {
 
 output "tfc_workspace_url" {
   description = "HCP Terraform Workspace URL"
-  value       = "https://app.terraform.io/app/rahul-tfc/workspaces/${tfe_workspace.main.name}"
+  value       = "https://app.terraform.io/app/${var.tf_organization_name}/workspaces/${tfe_workspace.main.name}"
+}
+
+output "tfc_oauth_client_id" {
+  description = "GitHub OAuth Client ID"
+  value       = tfe_oauth_client.github.id
 }
