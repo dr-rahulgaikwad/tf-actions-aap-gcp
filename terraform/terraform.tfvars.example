@@ -1,26 +1,18 @@
-# Copy this file to terraform.tfvars and customize for your environment
-# Never commit terraform.tfvars to version control
-
 # GCP Configuration
 gcp_project_id = "your-gcp-project-id"
 gcp_region     = "us-central1"
 gcp_zone       = "us-central1-a"
 
 # VM Configuration
-vm_count        = 2
+vm_count        = 3
 vm_machine_type = "e2-medium"
-ubuntu_image    = "ubuntu-os-cloud/ubuntu-2204-lts"
 
 # Vault Configuration
-vault_addr              = "https://your-vault-cluster.vault.hashicorp.cloud:8200"
-vault_gcp_secret_path   = "secret/gcp/service-account"
-vault_aap_token_path    = "secret/aap/api-token"
-vault_ssh_key_path      = "secret/ssh/ubuntu-key"
+vault_addr = "https://your-vault-cluster.vault.hashicorp.cloud:8200"
 
 # AAP Configuration
-aap_api_url         = "https://your-aap-server/api/controller/v2"
-aap_job_template_id = 9
+aap_hostname        = "https://sandbox-aap-dr-rahul-gaikwad-dev.apps.rm2.thpm.p1.openshiftapps.com"
+aap_job_template_id = 10
 
 # Resource Labels
 environment = "demo"
-managed_by  = "terraform"

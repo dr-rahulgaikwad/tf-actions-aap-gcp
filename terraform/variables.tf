@@ -79,8 +79,8 @@ variable "vault_ssh_key_path" {
 }
 
 # AAP Configuration
-variable "aap_api_url" {
-  description = "Ansible Automation Platform API endpoint URL"
+variable "aap_hostname" {
+  description = "Ansible Automation Platform hostname with protocol (e.g., https://your-aap-instance.com)"
   type        = string
 }
 

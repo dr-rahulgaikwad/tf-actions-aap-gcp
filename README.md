@@ -94,6 +94,8 @@ task setup
 - [Task](https://taskfile.dev/installation/)
 - Python 3.8+
 
+**Note**: This solution uses the official [Ansible AAP Terraform Provider](https://registry.terraform.io/providers/ansible/aap/latest) v1.4+ for seamless integration with Ansible Automation Platform.
+
 ### Verify Prerequisites
 
 ```bash
@@ -222,13 +224,14 @@ Configure these variables in your HCP Terraform workspace:
 
 **Terraform Variables:**
 - `vault_addr` = `https://your-vault-cluster.vault.hashicorp.cloud:8200`
-- `aap_api_url` = `https://your-aap-instance.com/api/controller/v2`
+- `aap_hostname` = `https://your-aap-instance.com`
 - `aap_job_template_id` = `<your-job-template-id>`
 - `gcp_project_id` = `your-gcp-project-id`
 
 **Environment Variables:**
 - `VAULT_TOKEN` = `your-vault-token` (mark as sensitive)
 - `VAULT_NAMESPACE` = `admin` (mark as sensitive)
+- `AAP_INSECURE_SKIP_VERIFY` = `true` (for self-signed certificates)
 
 ### 3. Initialize Terraform
 

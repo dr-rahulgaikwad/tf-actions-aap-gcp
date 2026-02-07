@@ -17,6 +17,10 @@ terraform {
       source  = "hashicorp/vault"
       version = "~> 4.0"
     }
+    aap = {
+      source  = "ansible/aap"
+      version = "~> 1.4"
+    }
   }
 }
 
@@ -31,4 +35,11 @@ provider "google" {
   project     = var.gcp_project_id
   region      = var.gcp_region
   zone        = var.gcp_zone
+}
+
+provider "aap" {
+  host  = var.aap_hostname
+  token = data.vault_generic_secret.aap_token.data["token"]
+  # Note: Set AAP_INSECURE_SKIP_VERIFY=true environment variable in HCP Terraform workspace
+  # for self-signed certificates
 }
