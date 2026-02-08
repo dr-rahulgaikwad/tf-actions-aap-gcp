@@ -61,6 +61,7 @@ resource "google_compute_instance" "ubuntu_vms" {
     managed_by  = var.managed_by
     os          = "ubuntu"
     demo        = "patching"
+    patch_ready = "true"
   }
 
   tags                      = ["ssh-access", "patching-demo"]
