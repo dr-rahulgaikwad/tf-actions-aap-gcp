@@ -22,4 +22,3 @@ output "patch_deployment_id" {
   description = "OS Config patch deployment identifier"
   value       = google_os_config_patch_deployment.ubuntu_patches.id
 }
-

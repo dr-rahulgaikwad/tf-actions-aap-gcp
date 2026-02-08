@@ -28,7 +28,6 @@ terraform {
   }
 }
 
-
 provider "vault" {
   address   = var.vault_addr
   token     = var.vault_token != "" ? var.vault_token : null
@@ -45,9 +44,8 @@ provider "google" {
 provider "aap" {
   host  = var.aap_hostname
   token = data.vault_generic_secret.aap_token.data["token"]
-  # Note: Use AAP_INSECURE_SKIP_VERIFY environment variable for TLS verification control
 }
 
 provider "tfe" {
-  # TFE_TOKEN environment variable should be set
+  # Set TFE_TOKEN as workspace environment variable
 }

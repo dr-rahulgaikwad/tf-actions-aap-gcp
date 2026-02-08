@@ -1,6 +1,5 @@
 # Terraform configuration for GCP VM provisioning and patching
 
-# Vault Data Sources to retrieve credentials securely
 data "vault_generic_secret" "gcp_credentials" {
   path = var.vault_gcp_secret_path
 }
@@ -13,7 +12,6 @@ data "vault_generic_secret" "ssh_key" {
   path = var.vault_ssh_key_path
 }
 
-# Networking
 resource "google_compute_network" "vpc_network" {
   name                    = "patching-demo-network"
   auto_create_subnetworks = true
@@ -30,12 +28,10 @@ resource "google_compute_firewall" "allow_ssh" {
   }
 
   target_tags   = ["ssh-access"]
-  source_ranges = ["0.0.0.0/0"] # Restrict in production
-
-  description = "Allow SSH access to patching demo VMs"
+  source_ranges = ["0.0.0.0/0"]
+  description   = "Allow SSH access to patching demo VMs"
 }
 
-# VM Instances
 resource "google_compute_instance" "ubuntu_vms" {
   count = var.vm_count
 
@@ -64,6 +60,7 @@ resource "google_compute_instance" "ubuntu_vms" {
     environment = var.environment
     managed_by  = var.managed_by
     os          = "ubuntu"
+    demo        = "patching"
   }
 
   tags                      = ["ssh-access", "patching-demo"]
@@ -72,7 +69,6 @@ resource "google_compute_instance" "ubuntu_vms" {
   depends_on = [google_compute_firewall.allow_ssh]
 }
 
-# OS Config Patch Deployment
 resource "google_os_config_patch_deployment" "ubuntu_patches" {
   patch_deployment_id = "ubuntu-security-patches"
 

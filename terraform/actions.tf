@@ -1,6 +1,5 @@
 # Terraform Actions for Day 2 operations using AAP provider
 
-# Prepare VM inventory and extra vars for Ansible
 locals {
   vm_inventory = {
     all = {
@@ -29,17 +28,15 @@ locals {
   }
 }
 
-# Terraform Action: Launch AAP job to patch VMs
 action "aap_job_launch" "patch_vms" {
   config {
     job_template_id                     = var.aap_job_template_id
-    wait_for_completion                 = true # Set to true once AAP job template is verified
+    wait_for_completion                 = true
     wait_for_completion_timeout_seconds = 600
     extra_vars                          = jsonencode(local.extra_vars)
   }
 }
 
-# Trigger action automatically after VM creation/update
 resource "terraform_data" "trigger_patch" {
   input = {
     vm_count = length(google_compute_instance.ubuntu_vms)
@@ -55,7 +52,6 @@ resource "terraform_data" "trigger_patch" {
   }
 }
 
-# Outputs for monitoring and debugging
 output "action_patch_vms_ready" {
   description = "Whether the patch_vms action is ready to be invoked"
   value = {

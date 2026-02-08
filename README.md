@@ -325,6 +325,60 @@ curl -k -X POST \
 
 ## Demo Walkthrough
 
+### Complete Demo Guide
+
+For a detailed walkthrough of demonstrating real security patching as Day-2 operations, see:
+
+📖 **[Demo Guide](demo/DEMO-GUIDE.md)** - Complete 15-20 minute demo script  
+📋 **[Quick Reference](demo/QUICK-REFERENCE.md)** - Quick reference card for presenters
+
+### Quick Demo Setup
+
+```bash
+# 1. Set up vulnerable state on VMs (simulates security issues)
+VM_IPS=$(cd terraform && terraform output -json vm_external_ips | jq -r '.[]')
+for VM_IP in $VM_IPS; do
+    scp -i ~/.ssh/ubuntu-patching demo/setup-vulnerable-state.sh ubuntu@${VM_IP}:/tmp/
+    ssh -i ~/.ssh/ubuntu-patching ubuntu@${VM_IP} "sudo bash /tmp/setup-vulnerable-state.sh"
+done
+
+# 2. Show vulnerability report
+ssh -i ~/.ssh/ubuntu-patching ubuntu@${VM_IPS[0]} "cat /tmp/vulnerability-report.txt"
+
+# 3. Trigger patching via Terraform Actions
+git add . && git commit -m "Trigger security patching" && git push origin main
+
+# 4. Monitor in AAP UI
+# Navigate to: https://your-aap-instance.com → Views → Jobs
+
+# 5. Verify results
+ssh -i ~/.ssh/ubuntu-patching ubuntu@${VM_IPS[0]} "apt list --upgradable 2>/dev/null | wc -l"
+```
+
+### Demo Highlights
+
+The demo showcases:
+
+1. **Pre-Patching Assessment**
+   - Current system state
+   - Available security updates
+   - Vulnerability identification
+
+2. **Automated Patching**
+   - Terraform Actions trigger AAP jobs
+   - Dynamic inventory from Terraform state
+   - Parallel execution across VMs
+
+3. **Post-Patching Verification**
+   - Reboot management
+   - Kernel updates
+   - Compliance reporting
+
+4. **Real-World Scenarios**
+   - Critical CVE response
+   - Maintenance window scheduling
+   - Multi-environment handling
+
 ### Phase 1: Provision Infrastructure (5 minutes)
 
 **Show the Code:**
