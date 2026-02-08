@@ -50,6 +50,8 @@ resource "terraform_data" "trigger_patch" {
       actions = [action.aap_job_launch.patch_vms]
     }
   }
+
+  depends_on = [time_sleep.wait_for_vms]
 }
 
 output "action_patch_vms_ready" {

@@ -69,6 +69,12 @@ resource "google_compute_instance" "ubuntu_vms" {
   depends_on = [google_compute_firewall.allow_ssh]
 }
 
+resource "time_sleep" "wait_for_vms" {
+  depends_on = [google_compute_instance.ubuntu_vms]
+  
+  create_duration = "90s"
+}
+
 resource "google_os_config_patch_deployment" "ubuntu_patches" {
   patch_deployment_id = "ubuntu-security-patches"
 
@@ -98,3 +104,5 @@ resource "google_os_config_patch_deployment" "ubuntu_patches" {
 }
 
 # Trigger patching demo - Sat Feb  8 18:45:00 PST 2026
+
+# Trigger patching demo - Ubuntu 20.04 with 125 security updates
