@@ -38,7 +38,7 @@ variable "vm_machine_type" {
 variable "ubuntu_image" {
   description = "Ubuntu OS image for VMs"
   type        = string
-  default     = "ubuntu-os-cloud/ubuntu-2004-lts"
+  default     = "ubuntu-os-cloud/ubuntu-2004-focal-v20230918"
 }
 
 # Vault Configuration
