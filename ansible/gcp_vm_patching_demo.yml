@@ -19,7 +19,7 @@
 - name: Security Patching - Day 2 Operations Demo
   hosts: gcp_vms
   become: yes
-  gather_facts: yes
+  gather_facts: no
   
   vars:
     ansible_user: ubuntu
@@ -28,6 +28,21 @@
     patch_type: "{{ patch_type | default('security') }}"
   
   tasks:
+    # ========================================
+    # Phase 0: Wait for VMs to be Ready
+    # ========================================
+    - name: Wait for VMs to be accessible via SSH
+      wait_for_connection:
+        timeout: 300
+        delay: 10
+      register: connection_result
+      retries: 3
+      delay: 30
+      until: connection_result is succeeded
+    
+    - name: Gather facts after connection established
+      setup:
+    
     # ========================================
     # Phase 1: Pre-Patching Assessment
     # ========================================

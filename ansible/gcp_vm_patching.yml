@@ -16,7 +16,7 @@
 - name: Patch Ubuntu VMs
   hosts: gcp_vms
   become: yes
-  gather_facts: yes
+  gather_facts: no
   
   vars:
     ansible_user: ubuntu
@@ -24,6 +24,18 @@
     reboot_timeout: 300
   
   tasks:
+    - name: Wait for VMs to be accessible via SSH
+      wait_for_connection:
+        timeout: 300
+        delay: 10
+      register: connection_result
+      retries: 3
+      delay: 30
+      until: connection_result is succeeded
+    
+    - name: Gather facts after connection established
+      setup:
+    
     - name: Update apt cache
       apt:
         update_cache: yes

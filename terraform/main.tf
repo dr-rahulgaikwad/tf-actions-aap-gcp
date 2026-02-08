@@ -73,7 +73,9 @@ resource "google_compute_instance" "ubuntu_vms" {
 resource "time_sleep" "wait_for_vms" {
   depends_on = [google_compute_instance.ubuntu_vms]
   
-  create_duration = "90s"
+  # Wait 3 minutes for VMs to fully boot and SSH to become available
+  # This ensures the AAP job can connect successfully when triggered
+  create_duration = "180s"
 }
 
 resource "google_os_config_patch_deployment" "ubuntu_patches" {

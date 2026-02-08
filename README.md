@@ -711,6 +711,33 @@ curl -k -H "Authorization: Bearer ${AAP_TOKEN}" \
   https://your-aap-instance.com/api/v2/me/
 ```
 
+**7. AAP Job Fails with SSH Connection Refused**
+This is the most common issue when VMs are recreated or first created.
+
+**Root Cause**: GCP VMs take 60-180 seconds to fully boot and accept SSH connections.
+
+**Solutions Implemented**:
+- Terraform waits 180 seconds before triggering AAP job
+- Playbook includes automatic SSH retries with `wait_for_connection`
+- Playbook waits up to 5 minutes for each VM to become accessible
+
+**If still failing**:
+```bash
+# Increase wait time in terraform/main.tf
+# Change create_duration from "180s" to "240s" or "300s"
+
+# Or manually trigger after VMs are ready
+cd terraform
+terraform output -raw aap_manual_trigger_command | bash
+```
+
+**8. Minimal Output from AAP Job (No Package Details)**
+- Your Job Template is using the production playbook (`gcp_vm_patching.yml`)
+- Switch to demo playbook for detailed output:
+  1. AAP UI → Resources → Templates → Your Job Template
+  2. Edit → Change Playbook to `ansible/gcp_vm_patching_demo.yml`
+  3. Save and re-run
+
 ---
 
 ## Production Deployment Checklist

@@ -44,6 +44,8 @@ resource "terraform_data" "trigger_patch" {
     vm_ids      = [for vm in google_compute_instance.ubuntu_vms : vm.id]
     vm_labels   = [for vm in google_compute_instance.ubuntu_vms : vm.labels]
     trigger_key = join(",", [for vm in google_compute_instance.ubuntu_vms : "${vm.name}-${vm.labels.patch_ready}"])
+    # Include sleep timestamp to ensure action waits for VMs to be ready
+    ready_timestamp = time_sleep.wait_for_vms.id
   }
 
   lifecycle {
