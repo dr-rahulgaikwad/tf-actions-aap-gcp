@@ -28,7 +28,7 @@ resource "google_compute_firewall" "allow_ssh" {
   }
 
   target_tags   = ["ssh-access"]
-  source_ranges = ["0.0.0.0/0"]
+  source_ranges = ["0.0.0.0/0"] # Replace it and do not use it in Production 
   description   = "Allow SSH access to patching demo VMs"
 }
 
@@ -73,9 +73,10 @@ resource "google_compute_instance" "ubuntu_vms" {
 resource "time_sleep" "wait_for_vms" {
   depends_on = [google_compute_instance.ubuntu_vms]
   
-  # Wait 3 minutes for VMs to fully boot and SSH to become available
+  # Wait 4 minutes for VMs to fully boot and SSH to become available
+  # GCP VMs typically take 60-180 seconds to boot, but can take longer
   # This ensures the AAP job can connect successfully when triggered
-  create_duration = "180s"
+  create_duration = "240s"
 }
 
 resource "google_os_config_patch_deployment" "ubuntu_patches" {

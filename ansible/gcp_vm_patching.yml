@@ -26,12 +26,19 @@
   tasks:
     - name: Wait for VMs to be accessible via SSH
       wait_for_connection:
-        timeout: 300
+        timeout: 600
         delay: 10
+        sleep: 5
       register: connection_result
-      retries: 3
-      delay: 30
       until: connection_result is succeeded
+      retries: 5
+      delay: 30
+      ignore_errors: yes
+    
+    - name: Fail if connection could not be established
+      fail:
+        msg: "Failed to connect to {{ inventory_hostname }} after multiple retries"
+      when: connection_result is failed
     
     - name: Gather facts after connection established
       setup:
