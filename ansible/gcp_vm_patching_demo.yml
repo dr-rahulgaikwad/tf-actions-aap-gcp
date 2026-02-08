@@ -125,7 +125,15 @@
           Packages Updated: {{ upgrade_result.changed }}
           Patch Type: {{ patch_type }}
           Status: {{ 'SUCCESS' if not upgrade_result.failed else 'FAILED' }}
+          {% if upgrade_result.changed %}
+          Packages Changed: {{ upgrade_result.stdout_lines | default([]) | length }}
+          {% endif %}
           ========================================
+    
+    - name: Show detailed package changes (if any)
+      debug:
+        msg: "{{ upgrade_result.stdout_lines }}"
+      when: upgrade_result.changed and upgrade_result.stdout_lines is defined
     
     # ========================================
     # Phase 3: Post-Patching Verification
