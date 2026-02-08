@@ -45,6 +45,7 @@ provider "google" {
 provider "aap" {
   host  = var.aap_hostname
   token = data.vault_generic_secret.aap_token.data["token"]
+  # Note: Use AAP_INSECURE_SKIP_VERIFY environment variable for TLS verification control
 }
 
 provider "tfe" {

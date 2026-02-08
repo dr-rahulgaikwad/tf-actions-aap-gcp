@@ -220,7 +220,9 @@ task vault-verify
 
 ### 2. HCP Terraform Workspace
 
-Configure these variables in your HCP Terraform workspace:
+The workspace is configured with VCS integration to GitHub. All deployments are triggered by pushing code changes.
+
+**Required Workspace Variables:**
 
 **Terraform Variables:**
 - `vault_addr` = `https://your-vault-cluster.vault.hashicorp.cloud:8200`
@@ -230,15 +232,27 @@ Configure these variables in your HCP Terraform workspace:
 
 **Environment Variables:**
 - `VAULT_TOKEN` = `your-vault-token` (mark as sensitive)
-- `VAULT_NAMESPACE` = `admin` (mark as sensitive)
+- `VAULT_NAMESPACE` = `admin`
 - `AAP_INSECURE_SKIP_VERIFY` = `true` (for self-signed certificates)
+- `TFE_TOKEN` = `your-tfe-api-token` (optional - eliminates TFE provider warning)
 
-### 3. Initialize Terraform
+**Note**: The `terraform.tfvars` file is excluded from git for security. Variables must be set in the HCP Terraform workspace UI.
+
+### 3. Deployment Method
+
+This project uses **VCS-driven workflow** with HCP Terraform:
 
 ```bash
-cd terraform
-terraform init
+# Make changes to Terraform configuration
+git add terraform/
+git commit -m "Update infrastructure"
+git push origin main
+
+# HCP Terraform automatically triggers a run
+# Monitor progress at: https://app.terraform.io/app/rahul-tfc/workspaces/tf-actions-aap-gcp
 ```
+
+**Important**: You cannot run `terraform apply` locally when using VCS-driven workflow. All changes must be pushed to GitHub to trigger runs.
 
 ---
 
@@ -246,28 +260,52 @@ terraform init
 
 ### Deploy Infrastructure
 
+**VCS-Driven Deployment (Recommended):**
+
 ```bash
-# Validate configuration
+# 1. Make changes to Terraform configuration
+vim terraform/main.tf
+
+# 2. Validate locally (optional)
 task tf-validate
 
-# Deploy via HCP Terraform (VCS-driven)
-git add .
+# 3. Commit and push to trigger HCP Terraform run
+git add terraform/
 git commit -m "Deploy infrastructure"
 git push origin main
 
-# Monitor in HCP Terraform UI
+# 4. Monitor in HCP Terraform UI
+# https://app.terraform.io/app/rahul-tfc/workspaces/tf-actions-aap-gcp
 ```
+
+**Note**: With VCS-driven workflow, `terraform apply` cannot be run locally. All deployments must go through GitHub → HCP Terraform.
 
 ### Trigger VM Patching
 
-```bash
-# Generate payload
-cd terraform
-terraform output -raw action_patch_vms_payload > /tmp/aap_payload.json
+Terraform Actions automatically trigger AAP patching jobs after VM creation or updates. The action is configured in `terraform/actions.tf`:
 
-# Get AAP details
+```hcl
+# Automatic trigger on VM changes
+resource "terraform_data" "trigger_patch" {
+  lifecycle {
+    action_trigger {
+      events  = [after_create, after_update]
+      actions = [action.aap_job_launch.patch_vms]
+    }
+  }
+}
+```
+
+**Manual Trigger (if needed):**
+
+```bash
+# Get AAP details from Terraform outputs
+cd terraform
 AAP_URL=$(terraform output -raw action_patch_vms_url)
 AAP_TOKEN=$(vault kv get -field=token secret/aap/api-token)
+
+# Generate payload
+terraform output -raw action_patch_vms_payload > /tmp/aap_payload.json
 
 # Trigger patching job
 curl -k -X POST \
@@ -416,9 +454,10 @@ EOF
 ├── terraform/                  # Terraform configuration
 │   ├── main.tf                # Main infrastructure
 │   ├── actions.tf             # Terraform Actions config
+│   ├── tfc-setup.tf           # TFC workspace setup (commented out)
 │   ├── variables.tf           # Variable definitions
 │   ├── outputs.tf             # Output values
-│   └── versions.tf            # Provider configuration
+│   └── providers.tf           # Provider configuration
 ├── tests/                      # Test suite
 │   ├── test_*.py              # Property-based tests
 │   ├── validate_*.sh          # Validation scripts
@@ -427,6 +466,8 @@ EOF
 ├── LICENSE                     # MIT License
 └── Taskfile.yml               # Task automation
 ```
+
+**Note on `tfc-setup.tf`**: This file contains resources for creating the TFC project and workspace programmatically. It's currently commented out because the workspace already exists. Uncomment if you need to recreate the workspace or set up a new environment.
 
 ---
 

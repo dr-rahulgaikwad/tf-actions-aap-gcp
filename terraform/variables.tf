@@ -114,11 +114,13 @@ variable "github_token" {
   description = "GitHub personal access token for OAuth"
   type        = string
   sensitive   = true
+  default     = ""
 }
 
 variable "github_repo" {
   description = "GitHub repository identifier (org/repo)"
   type        = string
+  default     = ""
 }
 
 
