@@ -39,9 +39,11 @@ action "aap_job_launch" "patch_vms" {
 
 resource "terraform_data" "trigger_patch" {
   input = {
-    vm_count = length(google_compute_instance.ubuntu_vms)
-    vm_names = [for vm in google_compute_instance.ubuntu_vms : vm.name]
-    vm_ids   = [for vm in google_compute_instance.ubuntu_vms : vm.id]
+    vm_count    = length(google_compute_instance.ubuntu_vms)
+    vm_names    = [for vm in google_compute_instance.ubuntu_vms : vm.name]
+    vm_ids      = [for vm in google_compute_instance.ubuntu_vms : vm.id]
+    vm_labels   = [for vm in google_compute_instance.ubuntu_vms : vm.labels]
+    trigger_key = join(",", [for vm in google_compute_instance.ubuntu_vms : "${vm.name}-${vm.labels.patch_ready}"])
   }
 
   lifecycle {
