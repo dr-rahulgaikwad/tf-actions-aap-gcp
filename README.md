@@ -58,21 +58,21 @@ This solution demonstrates how to bridge Infrastructure as Code (IaC) with Day-2
 ## Quick Start
 
 ```bash
-# 1. Clone the repository
+# 1. Clone repository
 git clone <repository-url>
 cd tf-actions-aap-gcp
 
-# 2. Verify prerequisites
-task check-prereqs
-
-# 3. Set environment variables
-export PROJECT_ID="your-gcp-project-id"
+# 2. Set environment variables
 export VAULT_ADDR="https://your-vault-cluster.vault.hashicorp.cloud:8200"
 export VAULT_TOKEN="your-vault-token"
 export VAULT_NAMESPACE="admin"
 
-# 4. Run automated setup
-task setup
+# 3. Configure Terraform workspace variables in HCP Terraform UI
+# - vault_addr, aap_hostname, aap_job_template_id, gcp_project_id
+# - VAULT_TOKEN, VAULT_NAMESPACE, AAP_INSECURE_SKIP_VERIFY (env vars)
+
+# 4. Push code to trigger deployment
+git push origin main
 ```
 
 ---
