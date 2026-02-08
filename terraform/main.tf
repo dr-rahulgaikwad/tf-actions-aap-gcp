@@ -96,3 +96,5 @@ resource "google_os_config_patch_deployment" "ubuntu_patches" {
 
   description = "Patch deployment for Ubuntu VMs in demo environment"
 }
+
+# Trigger patching demo - Sat Feb  8 18:45:00 PST 2026
