@@ -1,5 +1,3 @@
-# Terraform Variables
-
 # GCP Configuration
 variable "gcp_project_id" {
   description = "GCP project identifier"
@@ -23,7 +21,7 @@ variable "gcp_zone" {
 variable "vm_count" {
   description = "Number of Ubuntu VMs to provision"
   type        = number
-  default     = 2
+  default     = 5
 
   validation {
     condition     = var.vm_count > 0 && var.vm_count <= 10
@@ -40,7 +38,7 @@ variable "vm_machine_type" {
 variable "ubuntu_image" {
   description = "Ubuntu OS image for VMs"
   type        = string
-  default     = "ubuntu-os-cloud/ubuntu-2204-lts"
+  default     = "ubuntu-os-cloud/ubuntu-2004-focal-v20230918"
 }
 
 # Vault Configuration
@@ -74,21 +72,20 @@ variable "vault_aap_token_path" {
   default     = "secret/aap/api-token"
 }
 
-variable "vault_ssh_key_path" {
-  description = "Vault secret path for SSH private key"
-  type        = string
-  default     = "secret/ssh/ubuntu-key"
-}
-
 # AAP Configuration
-variable "aap_api_url" {
-  description = "Ansible Automation Platform API endpoint URL"
+variable "aap_hostname" {
+  description = "Ansible Automation Platform hostname with protocol (e.g., https://your-aap-instance.com)"
   type        = string
 }
 
 variable "aap_job_template_id" {
   description = "AAP job template ID for VM patching"
   type        = number
+}
+
+variable "ansible_user" {
+  description = "OS Login username for Ansible SSH access (e.g., your_email_domain_com)"
+  type        = string
 }
 
 # Resource Tagging
@@ -103,3 +100,109 @@ variable "managed_by" {
   type        = string
   default     = "terraform"
 }
+
+
+# HCP Terraform Setup Variables
+variable "tf_organization_name" {
+  description = "HCP Terraform organization name"
+  type        = string
+  default     = "rahul-tfc"
+}
+
+variable "github_token" {
+  description = "GitHub personal access token for OAuth"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+
+variable "github_repo" {
+  description = "GitHub repository identifier (org/repo)"
+  type        = string
+  default     = ""
+}
+
+
+# TFC Project Configuration
+variable "tfc_project_name" {
+  description = "HCP Terraform project name"
+  type        = string
+  default     = "terraform-actions-aap-gcp"
+}
+
+variable "tfc_project_description" {
+  description = "HCP Terraform project description"
+  type        = string
+  default     = "Terraform Actions demo with AAP and GCP for VM patching"
+}
+
+# TFC Workspace Configuration
+variable "tfc_workspace_name" {
+  description = "HCP Terraform workspace name"
+  type        = string
+  default     = "tf-actions-aap-gcp"
+}
+
+variable "tfc_workspace_description" {
+  description = "HCP Terraform workspace description"
+  type        = string
+  default     = "Demo workspace for Terraform Actions with AAP and GCP"
+}
+
+variable "tfc_working_directory" {
+  description = "Working directory for Terraform workspace"
+  type        = string
+  default     = "terraform"
+}
+
+variable "tfc_auto_apply" {
+  description = "Enable auto-apply for workspace"
+  type        = bool
+  default     = false
+}
+
+variable "tfc_queue_all_runs" {
+  description = "Queue all runs for workspace"
+  type        = bool
+  default     = false
+}
+
+# GitHub OAuth Configuration
+variable "github_api_url" {
+  description = "GitHub API URL"
+  type        = string
+  default     = "https://api.github.com"
+}
+
+variable "github_http_url" {
+  description = "GitHub HTTP URL"
+  type        = string
+  default     = "https://github.com"
+}
+
+variable "github_service_provider" {
+  description = "GitHub service provider type"
+  type        = string
+  default     = "github"
+}
+
+variable "github_organization_scoped" {
+  description = "Whether OAuth client is scoped to all projects and workspaces"
+  type        = bool
+  default     = true
+}
+
+# TFC Environment Variables
+variable "aap_insecure_skip_verify" {
+  description = "Skip TLS verification for AAP"
+  type        = string
+  default     = "true"
+}
+
+variable "tfe_token" {
+  description = "Terraform Cloud/Enterprise API token"
+  type        = string
+  sensitive   = true
+  default     = ""
+}
+

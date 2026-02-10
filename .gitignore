@@ -1,86 +1,47 @@
-# Local .terraform directories
+# Terraform
 .terraform/
-
-# .tfstate files
 *.tfstate
 *.tfstate.*
-
-# Crash log files
-crash.log
-crash.*.log
-
-# Exclude all .tfvars files, which are likely to contain sensitive data, such as
-# password, private keys, and other secrets. These should not be part of version 
-# control as they are data points which are potentially sensitive and subject 
-# to change depending on the environment.
 *.tfvars
-*.tfvars.json
-
-# Ignore override files as they are usually used to override resources locally and so
-# are not checked in
+!terraform.tfvars.example
+crash.log
 override.tf
 override.tf.json
 *_override.tf
 *_override.tf.json
 
-# Ignore transient lock info files created by terraform apply
-.terraform.tfstate.lock.info
-
-# Include override files you do wish to add to version control using negated pattern
-# !example_override.tf
-
-# Include tfplan files to ignore the plan output of command: terraform plan -out=tfplan
-# example: *tfplan*
-
-# Ignore CLI configuration files
-.terraformrc
-terraform.rc
-
-# Ansible specific
-*.retry
-ansible/.vault_pass
-ansible/vault_password
-
-# Python testing
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
-.hypothesis/
-*.cover
-.coverage
-htmlcov/
+*.egg-info/
+dist/
+build/
 
-# Virtual environments
-venv/
-env/
-ENV/
-.venv
-
-# IDE and editor files
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
-.DS_Store
 
-# Sensitive files - credentials and keys
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
 *.pem
 *.key
-*.json
-!terraform.tfvars.example
-service-account*.json
-credentials.json
-
-# Terraform plan files
-*.tfplan
-tfplan
+*_rsa
+*_rsa.pub
 
 # Logs
 *.log
 
-# Temporary files
-*.tmp
-.temp/
-tmp/
+# Kiro
+.kiro/
+
+# Demo and Architecture files (keep local only)
+ARCHITECTURE_DIAGRAMS.md
+DEMO_SCRIPT.md

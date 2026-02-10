@@ -1,8 +1,17 @@
-# Terraform Variables Configuration Template
-# Copy this file to terraform.tfvars and customize for your environment
-# Never commit terraform.tfvars to version control
+# ============================================================================
+# HCP Terraform Configuration
+# ============================================================================
+tf_organization_name = "rahul-tfc"
+tfc_project_name     = "terraform-actions-aap-gcp"
+tfc_workspace_name   = "tf-actions-aap-gcp"
 
+# GitHub OAuth Configuration
+github_token = "ghp_xxxxxxxxxxxxx"  # GitHub Personal Access Token
+github_repo  = "your-org/tf-actions-aap-gcp"
+
+# ============================================================================
 # GCP Configuration
+# ============================================================================
 gcp_project_id = "your-gcp-project-id"
 gcp_region     = "us-central1"
 gcp_zone       = "us-central1-a"
@@ -10,31 +19,22 @@ gcp_zone       = "us-central1-a"
 # VM Configuration
 vm_count        = 2
 vm_machine_type = "e2-medium"
-ubuntu_image    = "ubuntu-os-cloud/ubuntu-2204-lts"
 
+# ============================================================================
 # Vault Configuration
-vault_addr              = "https://your-vault-cluster.vault.hashicorp.cloud:8200"
-vault_gcp_secret_path   = "secret/gcp/service-account"
-vault_aap_token_path    = "secret/aap/api-token"
-vault_ssh_key_path      = "secret/ssh/ubuntu-key"
+# ============================================================================
+vault_addr = "https://your-vault-cluster.vault.hashicorp.cloud:8200"
 
-# Optional: Vault authentication (if not using environment variables)
-# vault_token     = ""  # Set in HCP Terraform workspace instead
-# vault_namespace = "admin"  # For HCP Vault
+# Note: vault_token should be set via environment variable VAULT_TOKEN
+# or passed securely. Do not commit actual tokens to version control.
 
+# ============================================================================
 # AAP Configuration
-aap_api_url         = "https://your-aap-server/api/controller/v2"
+# ============================================================================
+aap_hostname        = "https://your-aap-server"
 aap_job_template_id = 9
 
+# ============================================================================
 # Resource Labels
+# ============================================================================
 environment = "demo"
-managed_by  = "terraform"
-
-# Setup Instructions:
-# 1. Copy: cp terraform.tfvars.example terraform.tfvars
-# 2. Update values above with your configuration
-# 3. Store credentials in Vault (see docs/AUTOMATED_SETUP.md)
-# 4. Set VAULT_TOKEN in HCP Terraform workspace environment variables
-# 5. Run: task setup (or terraform init && terraform plan)
-#
-# For detailed setup, see: docs/AUTOMATED_SETUP.md

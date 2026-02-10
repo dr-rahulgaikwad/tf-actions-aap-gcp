@@ -1,14 +1,10 @@
 version: '3'
 
-# Taskfile for Terraform Actions GCP Patching
-# Automates setup, testing, and deployment tasks
-
 vars:
   TERRAFORM_DIR: terraform
   TESTS_DIR: tests
 
 tasks:
-  # Setup Tasks
   setup:
     desc: "Complete setup - GCP, Vault, and Terraform"
     cmds:
@@ -111,7 +107,6 @@ tasks:
       - vault kv get secret/ssh/ubuntu-key | grep private_key || echo "  Not found"
       - echo ""
 
-  # Terraform Tasks
   tf-init:
     desc: "Initialize Terraform"
     dir: "{{.TERRAFORM_DIR}}"
@@ -140,7 +135,6 @@ tasks:
       - rm -rf .terraform .terraform.lock.hcl
       - echo "✓ Cleaned"
 
-  # Testing Tasks
   test:
     desc: "Run all tests"
     cmds:
@@ -176,7 +170,6 @@ tasks:
       - sh: command -v python3
         msg: "Python 3 not found"
 
-  # Cleanup Tasks
   clean:
     desc: "Clean all temporary files"
     cmds:
@@ -184,7 +177,6 @@ tasks:
       - rm -rf {{.TESTS_DIR}}/__pycache__ {{.TESTS_DIR}}/.pytest_cache {{.TESTS_DIR}}/.hypothesis {{.TESTS_DIR}}/venv
       - echo "✓ All temporary files cleaned"
 
-  # Utility Tasks
   check-prereqs:
     desc: "Check prerequisites"
     cmds:
