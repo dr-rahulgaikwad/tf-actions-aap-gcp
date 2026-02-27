@@ -118,26 +118,96 @@ Terraform Actions will automatically trigger AAP job after apply.
 
 ## Architecture
 
+### Overall Architecture
+
 ```
-Developer → GitHub → HCP Terraform → Vault (secrets)
-                          ↓
-                    GCP VMs Created
-                          ↓
-                  Terraform Actions
-                          ↓
-                    AAP Job (OIDC)
-                          ↓
-                  VMs Patched (OS Login SSH)
+┌─────────────────────────────────────────────────────────────────┐
+│ Developer                                                       │
+│ - Commits code to GitHub                                        │
+└────────────────┬────────────────────────────────────────────────┘
+                 │
+                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ HCP Terraform Cloud                                             │
+│ - Generates JWT token (20-min TTL)                              │
+│ - Runs terraform plan/apply                                     │
+└────────────────┬────────────────────────────────────────────────┘
+                 │ JWT Token
+                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ HCP Vault                                                       │
+│ - Validates JWT token                                           │
+│ - Issues GCP access token (1-hour TTL)                          │
+│ - Provides AAP OAuth2 credentials                               │
+└────────────────┬────────────────────────────────────────────────┘
+                 │ GCP Access Token
+                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ Google Cloud Platform                                           │
+│ - Creates VMs with OS Login                                     │
+│ - Creates Workload Identity Pool for AAP                        │
+│ - Configures firewall rules                                     │
+└────────────────┬────────────────────────────────────────────────┘
+                 │ Terraform Actions Trigger
+                 ▼
+┌─────────────────────────────────────────────────────────────────┐
+│ Ansible Automation Platform                                     │
+│ - Receives job trigger with VM inventory                        │
+│ - Uses OIDC Workload Identity for GCP auth                      │
+│ - Connects via GCP OS Login (IAM-based SSH)                     │
+│ - Patches VMs                                                   │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Credential Flow (Zero Static Secrets)
+
+**1. Terraform → Vault (JWT Auth, 20-min TTL)**
+```
+TFC generates JWT → Vault validates via OIDC → Issues client token
+```
+
+**2. Terraform → GCP (Dynamic Token, 1-hour TTL)**
+```
+Terraform requests token → Vault GCP Secrets Engine → Issues access token
+```
+
+**3. Terraform → AAP (OAuth2, 10-hour TTL)**
+```
+Terraform reads OAuth2 creds → Exchanges for token → Triggers AAP job
+```
+
+**4. AAP → GCP (OIDC Workload Identity, 1-hour TTL)**
+```
+AAP generates OIDC token → GCP validates → Issues access token
+```
+
+**5. AAP → VMs (GCP OS Login, 1-hour TTL)**
+```
+AAP connects via SSH → OS Login validates → Generates SSH certificate
 ```
 
 ### Security Features
 
-- **OIDC Workload Identity**: Keyless GCP authentication (1-hour tokens)
-- **GCP OS Login**: IAM-based SSH (no keys on VMs)
-- **Vault Integration**: Dynamic secrets management
-- **Least Privilege IAM**: 6 specific roles only
-- **Conditional Firewall**: Environment-aware rules
-- **Audit Trail**: Complete logging
+**Zero Static Credentials:**
+- ✅ No static Vault tokens (JWT auth, 20-min TTL)
+- ✅ No static GCP keys (dynamic tokens, 1-hour TTL)
+- ✅ No static AAP tokens (OAuth2, 10-hour TTL)
+- ✅ No SSH keys on VMs (OS Login, IAM-based)
+
+**Credential TTLs:**
+| Credential | TTL | Auto-Rotation |
+|------------|-----|---------------|
+| Vault JWT | 20 min | ✅ Per run |
+| GCP Token | 1 hour | ✅ Per run |
+| AAP OAuth2 | 10 hours | ✅ Per run |
+| OIDC Token | 1 hour | ✅ Per job |
+| SSH Cert | 1 hour | ✅ Per connection |
+
+**Audit Trail:**
+- ✅ Vault audit logs (all credential access)
+- ✅ GCP audit logs (all API calls)
+- ✅ AAP audit logs (all job executions)
+- ✅ SSH access logs (all VM connections)
 
 ## Configuration
 

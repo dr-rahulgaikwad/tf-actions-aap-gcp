@@ -115,7 +115,7 @@ fi
 
 # Check 9: Documentation
 echo "9. Checking documentation..."
-REQUIRED_DOCS=("README.md" "ARCHITECTURE_DIAGRAMS.md" "PRODUCTION_READINESS_REPORT.md" "OIDC_SETUP.md")
+REQUIRED_DOCS=("README.md" "SETUP.md")
 MISSING_DOCS=0
 for doc in "${REQUIRED_DOCS[@]}"; do
     if [ ! -f "$doc" ]; then
@@ -163,19 +163,19 @@ if [ "$FAILED_CHECKS" -gt 0 ]; then
     echo "Fix all failed checks before deploying to production"
     echo ""
     echo "Next steps:"
-    echo "  1. Review PRODUCTION_READINESS_REPORT.md"
+    echo "  1. Review SETUP.md for configuration"
     echo "  2. Fix all failed checks"
-    echo "  3. Re-run: task validate-production"
+    echo "  3. Re-run: ./validate-production.sh"
     exit 1
 elif [ "$WARNING_CHECKS" -gt 0 ]; then
     echo -e "${YELLOW}⚠️  PRODUCTION DEPLOYMENT NOT RECOMMENDED${NC}"
     echo "Address warnings for production-grade security"
     echo ""
     echo "Recommendations:"
-    echo "  1. Review ARCHITECTURE_DIAGRAMS.md for production architecture"
+    echo "  1. Review SETUP.md for production configuration"
     echo "  2. Implement monitoring and backup policies"
     echo "  3. Use private subnets with Cloud NAT"
-    echo "  4. Re-run: task validate-production"
+    echo "  4. Set environment=production and aap_server_ip"
     exit 0
 else
     echo -e "${GREEN}✅ PRODUCTION READY${NC}"
