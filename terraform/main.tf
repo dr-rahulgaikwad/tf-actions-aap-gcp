@@ -1,13 +1,5 @@
 # Terraform configuration for GCP VM provisioning and patching
 
-data "vault_generic_secret" "gcp_credentials" {
-  path = var.vault_gcp_secret_path
-}
-
-data "vault_generic_secret" "aap_token" {
-  path = var.vault_aap_token_path
-}
-
 # Workload Identity Pool for OIDC authentication
 resource "google_iam_workload_identity_pool" "aap_pool" {
   workload_identity_pool_id = "aap-automation-pool"

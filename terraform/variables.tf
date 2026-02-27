@@ -47,29 +47,16 @@ variable "vault_addr" {
   type        = string
 }
 
-variable "vault_token" {
-  description = "Vault authentication token (optional - can use VAULT_TOKEN env var)"
-  type        = string
-  default     = ""
-  sensitive   = true
-}
-
 variable "vault_namespace" {
   description = "Vault namespace (for HCP Vault, typically 'admin')"
   type        = string
   default     = "admin"
 }
 
-variable "vault_gcp_secret_path" {
-  description = "Vault secret path for GCP service account credentials"
+variable "tfc_workload_identity_token" {
+  description = "TFC workload identity token (auto-injected by TFC)"
   type        = string
-  default     = "secret/gcp/service-account"
-}
-
-variable "vault_aap_token_path" {
-  description = "Vault secret path for AAP API token"
-  type        = string
-  default     = "secret/aap/api-token"
+  sensitive   = true
 }
 
 # AAP Configuration

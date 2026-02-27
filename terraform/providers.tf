@@ -33,25 +33,61 @@ terraform {
       source  = "hashicorp/tls"
       version = "~> 4.0"
     }
+    http = {
+      source  = "hashicorp/http"
+      version = "~> 3.0"
+    }
   }
 }
 
+# Dynamic Vault authentication via JWT (20-min TTL)
 provider "vault" {
   address   = var.vault_addr
-  token     = var.vault_token != "" ? var.vault_token : null
   namespace = var.vault_namespace
+
+  auth_login_jwt {
+    role = "terraform-cloud"
+    jwt  = var.tfc_workload_identity_token
+  }
+}
+
+# Dynamic GCP access token from Vault (1-hour TTL)
+data "vault_generic_secret" "gcp_token" {
+  path = "gcp/token/terraform-provisioner"
 }
 
 provider "google" {
-  credentials = jsonencode(data.vault_generic_secret.gcp_credentials.data)
-  project     = var.gcp_project_id
-  region      = var.gcp_region
-  zone        = var.gcp_zone
+  access_token = data.vault_generic_secret.gcp_token.data["token"]
+  project      = var.gcp_project_id
+  region       = var.gcp_region
+  zone         = var.gcp_zone
+}
+
+# Dynamic AAP OAuth2 token (10-hour TTL)
+data "vault_generic_secret" "aap_oauth2" {
+  path = "secret/aap/oauth2"
+}
+
+data "http" "aap_oauth2_token" {
+  url    = "${var.aap_hostname}/api/o/token/"
+  method = "POST"
+
+  request_headers = {
+    Content-Type = "application/x-www-form-urlencoded"
+  }
+
+  request_body = join("&", [
+    "grant_type=password",
+    "client_id=${data.vault_generic_secret.aap_oauth2.data["client_id"]}",
+    "client_secret=${data.vault_generic_secret.aap_oauth2.data["client_secret"]}",
+    "username=${data.vault_generic_secret.aap_oauth2.data["username"]}",
+    "password=${data.vault_generic_secret.aap_oauth2.data["password"]}"
+  ])
 }
 
 provider "aap" {
   host  = var.aap_hostname
-  token = data.vault_generic_secret.aap_token.data["token"]
+  token = jsondecode(data.http.aap_oauth2_token.response_body).access_token
 }
 
 provider "tfe" {
