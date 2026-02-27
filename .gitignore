@@ -45,3 +45,37 @@ Thumbs.db
 # Demo and Architecture files (keep local only)
 ARCHITECTURE_DIAGRAMS.md
 DEMO_SCRIPT.md
+# AI tool configs
+.agents/
+.crush/
+.junie/
+.mux/
+.qwen/
+.openhands/
+.pochi/
+.trae/
+.windsurf/
+.mcpjam/
+.cortex/
+.qoder/
+.roo/
+.goose/
+.neovate/
+.augment/
+.continue/
+.claude/
+.iflow/
+.zencoder/
+.adal/
+.kilocode/
+.kode/
+.commandcode/
+.agent/
+.vibe/
+.factory/
+.kiro/
+.cline/
+.codebuddy/
+.pi/
+skills/
+skills-lock.json

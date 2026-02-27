@@ -6,52 +6,34 @@ vars:
 
 tasks:
   setup:
-    desc: "Complete setup - GCP, Vault, and Terraform"
+    desc: "Complete setup guide"
     cmds:
-      - task: check-prereqs
-      - echo ""
-      - echo "Run these tasks in order:"
-      - echo "  1. task gcp-setup       - Configure GCP service account"
-      - echo "  2. task gcp-create-key  - Create and store key in Vault"
-      - echo "  3. task vault-setup     - Store AAP and SSH credentials"
-      - echo "  4. task vault-verify    - Verify all secrets"
-      - echo "  5. task tf-init         - Initialize Terraform"
+      - echo "Setup Steps:"
+      - echo "  1. task gcp-setup"
+      - echo "  2. task gcp-create-key"
+      - echo "  3. task vault-setup"
+      - echo "  4. task tf-init"
 
   gcp-setup:
-    desc: "Setup GCP service account with LEAST PRIVILEGE permissions (PRODUCTION-READY)"
+    desc: "Setup GCP service account with least privilege"
     cmds:
       - |
         export PROJECT_ID="${PROJECT_ID:-hc-4faa1ac49a5e46ecb46cfe87b37}"
         export SA_NAME="terraform-automation"
         export SA_EMAIL="${SA_NAME}@${PROJECT_ID}.iam.gserviceaccount.com"
         
-        echo "=== GCP Service Account Setup (PRODUCTION-READY) ==="
-        echo "Project: ${PROJECT_ID}"
-        echo "Service Account: ${SA_EMAIL}"
-        echo ""
-        
         gcloud config set project "${PROJECT_ID}"
-        
-        echo "Enabling APIs..."
         gcloud services enable compute.googleapis.com osconfig.googleapis.com iam.googleapis.com iamcredentials.googleapis.com
         
-        echo "Creating service account..."
-        gcloud iam service-accounts create "${SA_NAME}" \
-          --display-name="Terraform Automation" 2>/dev/null || echo "Already exists"
+        gcloud iam service-accounts create "${SA_NAME}" --display-name="Terraform Automation" 2>/dev/null || echo "Already exists"
         
-        echo "Granting LEAST PRIVILEGE IAM roles (PRODUCTION-READY)..."
-        echo "✅ Using specific roles instead of compute.admin"
         for role in compute.instanceAdmin.v1 compute.networkAdmin compute.securityAdmin osconfig.patchDeploymentAdmin iam.serviceAccountUser iam.workloadIdentityPoolAdmin; do
-          echo "  - Granting roles/${role}"
           gcloud projects add-iam-policy-binding "${PROJECT_ID}" \
             --member="serviceAccount:${SA_EMAIL}" \
             --role="roles/${role}" --condition=None --quiet
         done
         
-        echo ""
-        echo "✅ GCP service account configured with LEAST PRIVILEGE"
-        echo "⚠️  IMPORTANT: Review PRODUCTION_READINESS_REPORT.md before production deployment"
-        echo "Next: task gcp-create-key"
+        echo "✅ GCP service account configured"
     preconditions:
       - sh: command -v gcloud
         msg: "gcloud CLI not found"
@@ -64,51 +46,20 @@ tasks:
         export SA_EMAIL="terraform-automation@${PROJECT_ID}.iam.gserviceaccount.com"
         export KEY_FILE="terraform-sa-key.json"
         
-        echo "Creating key..."
         gcloud iam service-accounts keys create "${KEY_FILE}" --iam-account="${SA_EMAIL}"
-        
-        echo "Storing in Vault..."
         vault kv put secret/gcp/service-account @"${KEY_FILE}"
-        
-        echo "Verifying..."
         vault kv get secret/gcp/service-account | grep project_id
-        
         rm "${KEY_FILE}"
-        echo "✓ Key stored in Vault and local file deleted"
+        echo "✅ Key stored in Vault"
     preconditions:
       - sh: command -v vault && vault status
         msg: "Vault CLI not found or cannot connect"
 
   vault-setup:
-    desc: "Guide for storing AAP and SSH credentials in Vault"
+    desc: "Store AAP credentials in Vault"
     cmds:
-      - echo "=== Vault Secrets Setup ==="
-      - echo ""
-      - echo "Store these secrets in Vault"
-      - echo ""
-      - echo "1. AAP API Token"
-      - echo "   vault kv put secret/aap/api-token token=YOUR_TOKEN"
-      - echo ""
-      - echo "2. SSH Keys"
-      - echo "   ssh-keygen -t rsa -b 4096 -f ~/.ssh/ubuntu-patching -N ''"
-      - echo "   vault kv put secret/ssh/ubuntu-key private_key=@~/.ssh/ubuntu-patching public_key=@~/.ssh/ubuntu-patching.pub"
-      - echo ""
-      - echo "Then verify with task vault-verify"
-
-  vault-verify:
-    desc: "Verify all Vault secrets are configured"
-    cmds:
-      - echo "=== Verifying Vault Secrets ==="
-      - echo ""
-      - echo "GCP Service Account:"
-      - vault kv get secret/gcp/service-account | grep project_id || echo "  Not found"
-      - echo ""
-      - echo "AAP API Token:"
-      - vault kv get secret/aap/api-token | grep token || echo "  Not found"
-      - echo ""
-      - echo "SSH Keys:"
-      - vault kv get secret/ssh/ubuntu-key | grep private_key || echo "  Not found"
-      - echo ""
+      - echo "Store AAP API token:"
+      - echo "  vault kv put secret/aap/api-token token=YOUR_TOKEN"
 
   tf-init:
     desc: "Initialize Terraform"
@@ -117,26 +68,18 @@ tasks:
       - terraform init
 
   tf-validate:
-    desc: "Validate and format Terraform"
+    desc: "Validate Terraform"
     dir: "{{.TERRAFORM_DIR}}"
-    deps:
-      - tf-init
+    deps: [tf-init]
     cmds:
       - terraform fmt -recursive
       - terraform validate
 
   tf-plan:
-    desc: "Run Terraform plan (local)"
+    desc: "Run Terraform plan"
     dir: "{{.TERRAFORM_DIR}}"
     cmds:
       - terraform plan
-
-  tf-clean:
-    desc: "Clean Terraform temporary files"
-    dir: "{{.TERRAFORM_DIR}}"
-    cmds:
-      - rm -rf .terraform .terraform.lock.hcl
-      - echo "✓ Cleaned"
 
   test:
     desc: "Run all tests"
@@ -153,7 +96,7 @@ tasks:
       - ./validate_terraform.sh
 
   test-ansible:
-    desc: "Validate Ansible playbooks"
+    desc: "Validate Ansible"
     dir: "{{.TESTS_DIR}}"
     cmds:
       - chmod +x validate_ansible.sh
@@ -174,83 +117,16 @@ tasks:
         msg: "Python 3 not found"
 
   validate-production:
-    desc: "Validate production readiness (run before deploying to production)"
+    desc: "Validate production readiness"
     cmds:
-      - echo "=== Production Readiness Validation ==="
-      - echo ""
-      - echo "Checking critical security requirements..."
-      - echo ""
-      - |
-        # Check 1: Firewall rules
-        echo "1. Checking firewall rules..."
-        if grep -q '0\.0\.0\.0/0' terraform/main.tf; then
-          echo "   ❌ FAIL: Firewall open to 0.0.0.0/0 (CRITICAL SECURITY ISSUE)"
-          echo "   Action: Update source_ranges in terraform/main.tf"
-          exit 1
-        else
-          echo "   ✅ PASS: Firewall rules restricted"
-        fi
-        
-        # Check 2: IAM roles
-        echo "2. Checking IAM roles..."
-        if grep -q 'compute\.admin' Taskfile.yml terraform/*.tf 2>/dev/null; then
-          echo "   ❌ FAIL: Using compute.admin (overly broad permissions)"
-          echo "   Action: Use least privilege roles (see PRODUCTION_READINESS_REPORT.md)"
-          exit 1
-        else
-          echo "   ✅ PASS: Using least privilege IAM roles"
-        fi
-        
-        # Check 3: Vault token
-        echo "3. Checking Vault authentication..."
-        if grep -q 'VAULT_TOKEN.*hvs\.' terraform/*.tf README.md 2>/dev/null; then
-          echo "   ⚠️  WARNING: Static Vault token detected"
-          echo "   Recommendation: Use JWT auth (see PRODUCTION_READINESS_REPORT.md Section 5)"
-        else
-          echo "   ✅ PASS: No static Vault tokens detected"
-        fi
-        
-        # Check 4: Public IPs
-        echo "4. Checking VM network configuration..."
-        if grep -q 'access_config.*{}' terraform/main.tf; then
-          echo "   ⚠️  WARNING: VMs have public IPs"
-          echo "   Recommendation: Use private subnet + Cloud NAT (see ARCHITECTURE_DIAGRAMS.md)"
-        else
-          echo "   ✅ PASS: VMs using private IPs"
-        fi
-        
-        # Check 5: Monitoring
-        echo "5. Checking monitoring configuration..."
-        if [ -f "terraform/monitoring.tf" ]; then
-          echo "   ✅ PASS: Monitoring configured"
-        else
-          echo "   ⚠️  WARNING: No monitoring configuration found"
-          echo "   Recommendation: Add monitoring (see PRODUCTION_READINESS_REPORT.md Section 7)"
-        fi
-        
-        echo ""
-        echo "=== Validation Summary ==="
-        echo "Review PRODUCTION_READINESS_REPORT.md for detailed recommendations"
-        echo "Review ARCHITECTURE_DIAGRAMS.md for production architecture"
-        echo ""
-        echo "Security Score: Check ARCHITECTURE_DIAGRAMS.md for current vs. production comparison"
+      - ./validate-production.sh
 
   clean:
-    desc: "Clean all temporary files"
+    desc: "Clean temporary files"
     cmds:
-      - task: tf-clean
+      - rm -rf {{.TERRAFORM_DIR}}/.terraform {{.TERRAFORM_DIR}}/.terraform.lock.hcl
       - rm -rf {{.TESTS_DIR}}/__pycache__ {{.TESTS_DIR}}/.pytest_cache {{.TESTS_DIR}}/.hypothesis {{.TESTS_DIR}}/venv
-      - echo "✓ All temporary files cleaned"
-
-  check-prereqs:
-    desc: "Check prerequisites"
-    cmds:
-      - echo "Checking prerequisites..."
-      - |
-        for cmd in gcloud terraform vault python3 git; do
-          echo -n "  $cmd: "
-          command -v $cmd >/dev/null 2>&1 && echo "✓" || echo "✗"
-        done
+      - echo "✅ Cleaned"
 
   help:
     desc: "Show available tasks"
