@@ -18,6 +18,25 @@ output "ansible_sa_email" {
   value       = google_service_account.ansible_sa.email
 }
 
+output "workload_identity_pool_name" {
+  description = "Workload Identity Pool full resource name"
+  value       = google_iam_workload_identity_pool.aap_pool.name
+}
+
+output "workload_identity_provider_name" {
+  description = "Workload Identity Provider full resource name"
+  value       = google_iam_workload_identity_pool_provider.aap_provider.name
+}
+
+output "oidc_configuration" {
+  description = "OIDC configuration for AAP credential"
+  value = {
+    service_account_email = google_service_account.ansible_sa.email
+    workload_provider     = google_iam_workload_identity_pool_provider.aap_provider.name
+    project_id            = var.gcp_project_id
+  }
+}
+
 output "ansible_ssh_public_key" {
   description = "SSH public key to add to your OS Login profile"
   value       = tls_private_key.ansible_ssh.public_key_openssh

@@ -88,17 +88,44 @@ variable "ansible_user" {
   type        = string
 }
 
+variable "aap_oidc_issuer_url" {
+  description = "AAP OIDC issuer URL for Workload Identity Federation"
+  type        = string
+}
+
+variable "aap_oidc_repository" {
+  description = "Repository identifier for OIDC authentication (e.g., your-org/your-repo)"
+  type        = string
+}
+
 # Resource Tagging
 variable "environment" {
   description = "Environment label for resources"
   type        = string
   default     = "demo"
+
+  validation {
+    condition     = contains(["demo", "dev", "staging", "production"], var.environment)
+    error_message = "Environment must be one of: demo, dev, staging, production"
+  }
 }
 
 variable "managed_by" {
   description = "Management tool identifier"
   type        = string
   default     = "terraform"
+}
+
+# Production Security Variables
+variable "aap_server_ip" {
+  description = "AAP server public IP for firewall rules (required for production)"
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.environment != "production" || can(regex("^\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}$", var.aap_server_ip))
+    error_message = "AAP server IP is required for production environment"
+  }
 }
 
 

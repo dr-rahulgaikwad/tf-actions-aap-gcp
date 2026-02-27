@@ -8,17 +8,51 @@ data "vault_generic_secret" "aap_token" {
   path = var.vault_aap_token_path
 }
 
+# Workload Identity Pool for OIDC authentication
+resource "google_iam_workload_identity_pool" "aap_pool" {
+  workload_identity_pool_id = "aap-automation-pool"
+  display_name              = "AAP Automation Pool"
+  description               = "Workload Identity Pool for Ansible Automation Platform OIDC"
+}
+
+resource "google_iam_workload_identity_pool_provider" "aap_provider" {
+  workload_identity_pool_id          = google_iam_workload_identity_pool.aap_pool.workload_identity_pool_id
+  workload_identity_pool_provider_id = "aap-oidc-provider"
+  display_name                       = "AAP OIDC Provider"
+  description                        = "OIDC provider for AAP authentication"
+
+  attribute_mapping = {
+    "google.subject"       = "assertion.sub"
+    "attribute.aud"        = "assertion.aud"
+    "attribute.repository" = "assertion.repository"
+  }
+
+  oidc {
+    issuer_uri = var.aap_oidc_issuer_url
+  }
+}
+
+# Service account for Ansible automation
 resource "google_service_account" "ansible_sa" {
   account_id   = "ansible-automation"
   display_name = "Ansible Automation Service Account"
-  description  = "Service account for Ansible OS Login SSH access"
+  description  = "Service account for Ansible OS Login SSH access via OIDC"
 }
 
+# Allow OIDC token to impersonate service account
+resource "google_service_account_iam_member" "workload_identity_user" {
+  service_account_id = google_service_account.ansible_sa.name
+  role               = "roles/iam.workloadIdentityUser"
+  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.aap_pool.name}/attribute.repository/${var.aap_oidc_repository}"
+}
+
+# SSH key for OS Login
 resource "tls_private_key" "ansible_ssh" {
   algorithm = "RSA"
   rsa_bits  = 4096
 }
 
+# Grant OS Login permissions at instance level
 resource "google_compute_instance_iam_member" "ansible_oslogin" {
   count = var.vm_count
 
@@ -53,8 +87,16 @@ resource "google_compute_firewall" "allow_ssh" {
     ports    = ["22"]
   }
 
-  target_tags   = ["ssh-access"]
-  source_ranges = ["0.0.0.0/0"] # For Demo only — restrict to trusted CIDR ranges in production
+  target_tags = ["ssh-access"]
+
+  # PRODUCTION-READY: Restrict to AAP server and Cloud IAP only
+  # For demo: Using 0.0.0.0/0 - MUST change before production
+  source_ranges = var.environment == "production" ? [
+    "${var.aap_server_ip}/32", # AAP server only
+    "35.235.240.0/20",         # Cloud IAP range for emergency access
+  ] : ["0.0.0.0/0"]
+
+  description = var.environment == "production" ? "SSH restricted to AAP and Cloud IAP" : "Demo firewall - INSECURE for production"
 }
 
 resource "google_compute_instance" "ubuntu_vms" {
