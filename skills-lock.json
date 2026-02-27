@@ -1,0 +1,230 @@
+{
+  "version": 1,
+  "skills": {
+    "aws": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "42d03cf5ab2ee1faa4ad7965094a25be7306732ea34739a553ed52aa6d89bbef"
+    },
+    "azure": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "48a5a94c8881bf0760bc53e2f2f2f6d85165fcb191eb957526447eac2076d551"
+    },
+    "blog": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "c2583dd999f86d07b6eaddea7274f8ae1498d9e4b67062837a34cb036040bfa5"
+    },
+    "boundary": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "2c6d803c71d52e09befbfb9fa42e0dd5184d554af718a98da2c48800d26817ae"
+    },
+    "claude-code": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "e9b33b607b13a71261a3b0d7a81bfebaa18c93105e5e5178b362e4099c71e60d"
+    },
+    "consul": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "c25d02c1051420de5efa528edc7abc49f99fb2ff384385a232f3662896b79a99"
+    },
+    "critical-thinking": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "8f35c76ad1b6cf0172274f3fb4abc3ba59f56cd89bfa3a54666804bbea6b5df2"
+    },
+    "developer": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "36ca32629ef9c87fef686859df380eb5d60f9978ba84eb6a8a7bc751b0e2d682"
+    },
+    "docker": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "9dd676663e2755e666c00949fdeb1a742f5ff5ff09978029fb039aa97c0043f4"
+    },
+    "docs-content-guide": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "3538b90f0b007ce3ef25138a31ea5ed37b273d269dce3950d4596ea2075b7a63"
+    },
+    "docs-style-guide": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "e57d876ca57103a7dc1ed6a4f3b2ec209870e7c2a31a7ab76de4bc7f7d2d68bc"
+    },
+    "doormat": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "373f8d58133866097039dd9614061ea1d5326b83735954c27372924e1389b622"
+    },
+    "ember": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "25c6279f353abb867bddd011ca89f9bd7041df47c14f5b381a2a13d6fbc66f85"
+    },
+    "feature-flags": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "31345150e594d1129acb32dc85a5ede055f10967cca94a1ea46d41579fca5b83"
+    },
+    "gcp": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "2235b53af62555ea9b5df003b47d51ef8a74637b4ef94547fe0a97abf08d5d3a"
+    },
+    "github": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "bd58b9736481496c93685edff60dfd6dd46a0dc8a4d60df1cae5059c37ea16a9"
+    },
+    "golang": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "6254605a3124b7a5a819f2d11c0e069985fd0f09bc59bb1edb9e07dea3a3ff45"
+    },
+    "google-docs": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "4bfc70511920366735b3bc784371e2a702187dee21bc4b6f6bd245ddf0a24c50"
+    },
+    "grc": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "6f34009780fdd8a5d8c3d887641d6d5b8813274cb16bea96efece0f7a6ebbb1f"
+    },
+    "hashi-designer": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "705820ec3179f8f4031075560f0e6fee42428beb3306e31587a4d37a652bbaa2"
+    },
+    "hashicorp": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "4b3af83286163b3b3b374d929db0c99b375dc944b78aa642b26c544d1001392d"
+    },
+    "hcloud": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "97ad6fab6f7a1fd6414320c28e1697bfc67b0dde728b485b2733b9d1b4667968"
+    },
+    "hcp": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "fec00e9a1ac01c2d5381e25d27427a6d030de3a4f70be61244a2b9c1594463e0"
+    },
+    "hcp-tf-ui": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "746b5737a50b758c9dd59e053e71ff9e6dcf928f56fc22d59caa3a7c33a10b61"
+    },
+    "hds": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "e830df4446802d42c2387fd552ba64f9b8a3acfecb5346a8793ae89c392ddcd5"
+    },
+    "heimdall": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "2275df53048a59199f23a2250804ebcb16c127c85bdf75a0881e9671e08de177"
+    },
+    "hermes": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "4fe3371561ff159a6971f7ba6c16f9e6b69d1470a86aa64f6754dac4d23144b4"
+    },
+    "homebrew": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "3819ad49019ac0657aaf1dd8d6f12eeec7bc4bac58bbc160b198e570016d623d"
+    },
+    "ipg": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "834afdbdbbc010284474d5454ad992cc5cd19afb253918b9b7dec84f4736f83a"
+    },
+    "jira": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "22aa6cde1a142ec19ce150261abfe6f81a6b526eb99185d4ae5e9c3556d5d901"
+    },
+    "kubernetes": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "a08d0dc6f3ad41f04b23a5af927a7b1a1c7ad273ac60184a5a530a4898d8fa79"
+    },
+    "marketing": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "dd9e9f2d4be8bee7c2333d99b18c64237f16a57159c1ed539b39b7bfa2bf3fb4"
+    },
+    "memo": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "446099d98be423a1d6b7f7a1d15ff61cae6f633979e0021a114c4ec03fc64839"
+    },
+    "nomad": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "fc1cbd4cb2ab980542bc07603edeeccb46a08f7ddc0a24688d6c69dcddfd3e59"
+    },
+    "prd": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "bb56c4e31ee761d70c64825bc371375dad9b811b570ffaa74172c1fceb51b86b"
+    },
+    "prfaq": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "94a74da419b1e06f81b0e1e0c9a15e0982581ccf9a30366a77026a4332787ce5"
+    },
+    "radar": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "da0a9eabd67795289ae04234e4513533f1b3dc712ca8483de299116aa7e7dd83"
+    },
+    "rfc": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "2f7cb99a4764a5dd65bf328abfadbcba36fb06012ada3244203611d4f4cdcb89"
+    },
+    "rnd": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "15ec903dc3941a06c5c0da948b6db15a4909ec20f8ada69c5b4616ebf02c67b4"
+    },
+    "sentinel": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "72cd63517e28667d37f3902ada3e043fa60756fc344add3e4aa8eca0545adf4a"
+    },
+    "slack": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "9cc7f10f4cc3322564a38a955c737d14723a76c86757862eea190e2f44033958"
+    },
+    "spg": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "757680ce6026becf5f743bd2299cecbd00fa79ef68fb072bb350cd65d5fdc05a"
+    },
+    "terraform": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "9f645beddc989c53248fe9eedd1d1526f885a12c6bcbe221eaa2e55d30219e65"
+    },
+    "vault": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "c2d9491a90c8683a51c9512fad75c7c9f41fb1baabe62014afe0b6231c20358c"
+    },
+    "waypoint": {
+      "source": "hashicorp/internal-agent-skills",
+      "sourceType": "github",
+      "computedHash": "35a091a8cc13c1e822bdb12977790b8613539f7b15151933c2f95e8b6efeeeba"
+    }
+  }
+}

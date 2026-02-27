@@ -1,0 +1,24 @@
+FILES TO REMOVE:
+1. DEPLOYMENT_SUMMARY.md - Merge into README
+2. SOLUTION_WORKFLOW.md - Too verbose, merge key points into README
+3. skills-lock.json - Not needed
+4. All .agent/.crush/.junie etc directories - AI tool configs
+5. terraform/tfc-setup.tf - Not part of core solution
+
+FILES TO SIMPLIFY:
+1. README.md - Remove verbose sections, keep essentials
+2. Taskfile.yml - Remove redundant tasks
+3. ARCHITECTURE_DIAGRAMS.md - Keep only essential diagrams
+4. PRODUCTION_READINESS_REPORT.md - Consolidate into README
+
+FILES TO KEEP AS-IS:
+1. terraform/main.tf
+2. terraform/variables.tf
+3. terraform/outputs.tf
+4. terraform/actions.tf
+5. terraform/providers.tf
+6. ansible/gcp_vm_patching_demo.yml
+7. tests/* (all test files)
+8. OIDC_SETUP.md
+9. validate-production.sh
+10. terraform/final-blog.md (the blog post)

@@ -31,8 +31,11 @@ vault_addr = "https://your-vault-cluster.vault.hashicorp.cloud:8200"
 # ============================================================================
 # AAP Configuration
 # ============================================================================
-aap_hostname        = "https://your-aap-server"
-aap_job_template_id = 9
+aap_hostname         = "https://your-aap-server"
+aap_job_template_id  = 9
+ansible_user         = "your_email_domain_com"
+aap_oidc_issuer_url  = "https://your-aap-server"
+aap_oidc_repository  = "your-org/your-repo"
 
 # ============================================================================
 # Resource Labels
