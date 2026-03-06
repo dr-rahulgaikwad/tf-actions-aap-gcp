@@ -66,7 +66,7 @@ variable "aap_hostname" {
 }
 
 variable "aap_job_template_id" {
-  description = "AAP job template ID for VM patching"
+  description = "AAP job template ID for VM patching (create manually in AAP)"
   type        = number
 }
 

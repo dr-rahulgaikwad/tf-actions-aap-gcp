@@ -1,3 +1,31 @@
+# =============================================================================
+# AAP Resources (Automated)
+# =============================================================================
+
+# AAP Inventory - Created automatically
+resource "aap_inventory" "vms" {
+  name         = "${var.environment}-gcp-vms"
+  description  = "GCP VMs managed by Terraform"
+  organization = 1
+}
+
+# Register VMs in AAP inventory - Automated
+resource "aap_host" "vms" {
+  for_each = google_compute_instance.ubuntu_vms
+
+  name         = each.value.name
+  inventory_id = aap_inventory.vms.id
+
+  variables = jsonencode({
+    ansible_host = each.value.network_interface[0].access_config[0].nat_ip
+    ansible_user = var.ansible_user
+  })
+}
+
+# =============================================================================
+# Terraform Actions
+# =============================================================================
+
 locals {
   vm_inventory = {
     all = {
@@ -29,6 +57,7 @@ locals {
 action "aap_job_launch" "patch_vms" {
   config {
     job_template_id                     = var.aap_job_template_id
+    inventory_id                        = aap_inventory.vms.id
     wait_for_completion                 = true
     wait_for_completion_timeout_seconds = 1800
     extra_vars                          = jsonencode(local.extra_vars)
@@ -50,7 +79,10 @@ resource "terraform_data" "trigger_patch" {
     }
   }
 
-  depends_on = [time_sleep.wait_for_vms]
+  depends_on = [
+    time_sleep.wait_for_vms,
+    aap_host.vms
+  ]
 }
 
 output "action_patch_vms_ready" {
@@ -59,6 +91,8 @@ output "action_patch_vms_ready" {
     ready           = length(google_compute_instance.ubuntu_vms) > 0
     vm_count        = length(google_compute_instance.ubuntu_vms)
     job_template_id = var.aap_job_template_id
+    inventory_id    = aap_inventory.vms.id
+    inventory_name  = aap_inventory.vms.name
   }
 }
 
