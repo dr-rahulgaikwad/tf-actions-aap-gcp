@@ -52,20 +52,22 @@ provider "vault" {
 }
 
 # Dynamic GCP access token from Vault (1-hour TTL)
-data "vault_generic_secret" "gcp_token" {
-  path = "gcp/token/terraform-provisioner"
+data "vault_kv_secret_v2" "gcp_token" {
+  mount = "gcp"
+  name  = "token/terraform-provisioner"
 }
 
 provider "google" {
-  access_token = data.vault_generic_secret.gcp_token.data["token"]
+  access_token = data.vault_kv_secret_v2.gcp_token.data["token"]
   project      = var.gcp_project_id
   region       = var.gcp_region
   zone         = var.gcp_zone
 }
 
 # Dynamic AAP OAuth2 token (10-hour TTL)
-data "vault_generic_secret" "aap_oauth2" {
-  path = "secret/aap/oauth2"
+data "vault_kv_secret_v2" "aap_oauth2" {
+  mount = "secret"
+  name  = "aap/oauth2"
 }
 
 data "http" "aap_oauth2_token" {
@@ -78,10 +80,10 @@ data "http" "aap_oauth2_token" {
 
   request_body = join("&", [
     "grant_type=password",
-    "client_id=${data.vault_generic_secret.aap_oauth2.data["client_id"]}",
-    "client_secret=${data.vault_generic_secret.aap_oauth2.data["client_secret"]}",
-    "username=${data.vault_generic_secret.aap_oauth2.data["username"]}",
-    "password=${data.vault_generic_secret.aap_oauth2.data["password"]}"
+    "client_id=${data.vault_kv_secret_v2.aap_oauth2.data["client_id"]}",
+    "client_secret=${data.vault_kv_secret_v2.aap_oauth2.data["client_secret"]}",
+    "username=${data.vault_kv_secret_v2.aap_oauth2.data["username"]}",
+    "password=${data.vault_kv_secret_v2.aap_oauth2.data["password"]}"
   ])
 }
 
