@@ -71,7 +71,7 @@ data "vault_kv_secret_v2" "aap_oauth2" {
 }
 
 data "http" "aap_oauth2_token" {
-  url    = "${var.aap_hostname}/api/o/token/"
+  url    = "${var.aap_hostname}/api/gateway/v1/token/"
   method = "POST"
 
   request_headers = {
