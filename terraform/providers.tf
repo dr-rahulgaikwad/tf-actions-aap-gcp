@@ -41,14 +41,13 @@ terraform {
 }
 
 # Dynamic Vault authentication via JWT (20-min TTL)
+# TFC automatically provides JWT token via TFC_VAULT_* environment variables
 provider "vault" {
   address   = var.vault_addr
   namespace = var.vault_namespace
 
-  auth_login_jwt {
-    role = "terraform-cloud"
-    jwt  = var.tfc_workload_identity_token
-  }
+  # JWT auth is handled automatically by TFC when TFC_VAULT_PROVIDER_AUTH=true
+  # No explicit auth_login_jwt block needed
 }
 
 # Dynamic GCP access token from Vault (1-hour TTL)

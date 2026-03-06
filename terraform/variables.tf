@@ -53,12 +53,6 @@ variable "vault_namespace" {
   default     = "admin"
 }
 
-variable "tfc_workload_identity_token" {
-  description = "TFC workload identity token (auto-injected by TFC)"
-  type        = string
-  sensitive   = true
-}
-
 # AAP Configuration
 variable "aap_hostname" {
   description = "Ansible Automation Platform hostname with protocol (e.g., https://your-aap-instance.com)"
