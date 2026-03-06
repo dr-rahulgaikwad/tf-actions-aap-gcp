@@ -11,7 +11,7 @@ resource "aap_inventory" "vms" {
 
 # Register VMs in AAP inventory - Automated
 resource "aap_host" "vms" {
-  for_each = google_compute_instance.ubuntu_vms
+  for_each = { for idx, vm in google_compute_instance.ubuntu_vms : vm.name => vm }
 
   name         = each.value.name
   inventory_id = aap_inventory.vms.id
