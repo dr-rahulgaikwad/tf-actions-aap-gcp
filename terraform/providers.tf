@@ -50,16 +50,18 @@ provider "vault" {
   # No explicit auth_login_jwt block needed
 }
 
-# Dynamic GCP access token from Vault (1-hour TTL)
-data "vault_generic_secret" "gcp_token" {
-  path = "gcp/token/terraform-provisioner"
+# GCP credentials from Vault KV (static service account key)
+# Note: Using static credentials as fallback - HCP Vault GCP secrets engine has timeout issues
+data "vault_kv_secret_v2" "gcp_credentials" {
+  mount = "secret"
+  name  = "gcp/credentials"
 }
 
 provider "google" {
-  access_token = data.vault_generic_secret.gcp_token.data["token"]
-  project      = var.gcp_project_id
-  region       = var.gcp_region
-  zone         = var.gcp_zone
+  credentials = data.vault_kv_secret_v2.gcp_credentials.data["json"]
+  project     = var.gcp_project_id
+  region      = var.gcp_region
+  zone        = var.gcp_zone
 }
 
 # Dynamic AAP OAuth2 token (10-hour TTL)
