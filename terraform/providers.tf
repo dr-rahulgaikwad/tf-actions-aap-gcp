@@ -71,10 +71,9 @@ data "vault_kv_secret_v2" "aap_oauth2" {
 }
 
 provider "aap" {
-  host           = var.aap_hostname
-  username       = data.vault_kv_secret_v2.aap_oauth2.data["username"]
-  password       = data.vault_kv_secret_v2.aap_oauth2.data["password"]
-  oauth_token_id = data.vault_kv_secret_v2.aap_oauth2.data["client_id"]
+  host     = var.aap_hostname
+  username = data.vault_kv_secret_v2.aap_oauth2.data["username"]
+  password = data.vault_kv_secret_v2.aap_oauth2.data["password"]
 }
 
 provider "tfe" {
