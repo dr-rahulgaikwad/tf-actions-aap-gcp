@@ -70,26 +70,11 @@ data "vault_kv_secret_v2" "aap_oauth2" {
   name  = "aap/oauth2"
 }
 
-data "http" "aap_oauth2_token" {
-  url    = "${var.aap_hostname}/api/gateway/v1/token/"
-  method = "POST"
-
-  request_headers = {
-    Content-Type = "application/x-www-form-urlencoded"
-  }
-
-  request_body = join("&", [
-    "grant_type=password",
-    "client_id=${data.vault_kv_secret_v2.aap_oauth2.data["client_id"]}",
-    "client_secret=${data.vault_kv_secret_v2.aap_oauth2.data["client_secret"]}",
-    "username=${data.vault_kv_secret_v2.aap_oauth2.data["username"]}",
-    "password=${data.vault_kv_secret_v2.aap_oauth2.data["password"]}"
-  ])
-}
-
 provider "aap" {
-  host  = var.aap_hostname
-  token = jsondecode(data.http.aap_oauth2_token.response_body).access_token
+  host           = var.aap_hostname
+  username       = data.vault_kv_secret_v2.aap_oauth2.data["username"]
+  password       = data.vault_kv_secret_v2.aap_oauth2.data["password"]
+  oauth_token_id = data.vault_kv_secret_v2.aap_oauth2.data["client_id"]
 }
 
 provider "tfe" {
