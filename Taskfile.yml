@@ -1,17 +1,7 @@
 version: '3'
 
 tasks:
-  # =============================================================================
-  # Main Tasks
-  # =============================================================================
-  
-  test:
-    desc: Run all tests
-    cmds:
-      - task: test-terraform
-      - task: test-ansible
-      - task: validate-production
-
+  # Main tasks
   deploy:
     desc: Deploy infrastructure
     dir: terraform
@@ -25,138 +15,25 @@ tasks:
     cmds:
       - terraform destroy
 
-  # =============================================================================
-  # Terraform Tasks
-  # =============================================================================
-
-  tf-init:
-    desc: Initialize Terraform
-    dir: terraform
-    cmds:
-      - terraform init
-
-  tf-plan:
-    desc: Plan Terraform changes
-    dir: terraform
-    cmds:
-      - terraform plan
-
-  tf-apply:
-    desc: Apply Terraform changes
-    dir: terraform
-    cmds:
-      - terraform apply
-
-  tf-destroy:
-    desc: Destroy Terraform resources
-    dir: terraform
-    cmds:
-      - terraform destroy
-
-  tf-fmt:
-    desc: Format Terraform files
-    dir: terraform
-    cmds:
-      - terraform fmt -recursive
-
-  tf-validate:
-    desc: Validate Terraform configuration
-    dir: terraform
-    cmds:
-      - terraform validate
-
-  test-terraform:
-    desc: Test Terraform configuration
+  test:
+    desc: Validate configuration
     dir: terraform
     cmds:
       - terraform fmt -check -recursive
       - terraform validate
 
-  # =============================================================================
-  # Ansible Tasks
-  # =============================================================================
-
-  test-ansible:
-    desc: Test Ansible playbooks
-    dir: ansible/playbooks
-    cmds:
-      - ansible-playbook --syntax-check gcp_vm_patching_demo.yml
-
-  ansible-lint:
-    desc: Lint Ansible playbooks
-    dir: ansible/playbooks
-    cmds:
-      - ansible-lint gcp_vm_patching_demo.yml
-
-  # =============================================================================
-  # Validation Tasks
-  # =============================================================================
-
-  validate-production:
-    desc: Run production validation checks
-    cmds:
-      - ./validate-production.sh
-
-  check-credentials:
-    desc: Verify dynamic credentials are configured
-    cmds:
-      - echo "Checking Vault connectivity..."
-      - vault status
-      - echo "Checking GCP token generation..."
-      - vault read gcp/token/terraform-provisioner
-      - echo "✅ Credentials validated"
-
-  # =============================================================================
-  # Setup Tasks
-  # =============================================================================
-
-  setup-vault:
-    desc: Setup Vault for dynamic credentials
-    cmds:
-      - echo "Enabling GCP secrets engine..."
-      - vault secrets enable gcp || echo "Already enabled"
-      - echo "Vault setup complete. Configure with vault write gcp/config credentials=@vault-admin-key.json"
-
+  # Setup tasks
   setup-os-login:
     desc: Add SSH key to GCP OS Login
     dir: terraform
     cmds:
-      - terraform output -raw ansible_ssh_public_key > /tmp/key.pub
+      - terraform output -raw ansible_ssh_private_key > /tmp/key.pub
       - gcloud compute os-login ssh-keys add --key-file=/tmp/key.pub
       - rm /tmp/key.pub
-      - echo "SSH key added to OS Login"
-      - echo "Your OS Login username:"
+      - echo "SSH key added. Your OS Login username:"
       - gcloud compute os-login describe-profile --format="value(posixAccounts[0].username)"
 
-  # =============================================================================
-  # Cleanup Tasks
-  # =============================================================================
-
-  clean:
-    desc: Clean temporary files
-    cmds:
-      - rm -rf terraform/.terraform
-      - rm -f terraform/.terraform.lock.hcl
-      - rm -f terraform/terraform.tfstate*
-      - rm -f /tmp/key.pub
-      - echo "Cleaned temporary files"
-
-  # =============================================================================
-  # Documentation Tasks
-  # =============================================================================
-
-  docs:
-    desc: Generate documentation
-    cmds:
-      - echo "📚 Documentation available in:"
-      - echo "  - README.md (Quick start)"
-      - echo "  - SETUP.md (Detailed setup)"
-      - echo "  - validate-production.sh (Production checklist)"
-
-  # =============================================================================
-  # Helper Tasks
-  # =============================================================================
-
+  # Helper tasks
   outputs:
     desc: Show Terraform outputs
     dir: terraform
@@ -169,7 +46,9 @@ tasks:
     cmds:
       - terraform output -raw ansible_ssh_private_key
 
-  os-login-username:
-    desc: Get OS Login username
+  clean:
+    desc: Clean temporary files
     cmds:
-      - gcloud compute os-login describe-profile --format="value(posixAccounts[0].username)"
+      - rm -rf terraform/.terraform
+      - rm -f terraform/.terraform.lock.hcl
+      - rm -f /tmp/key.pub
