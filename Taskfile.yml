@@ -80,8 +80,26 @@ tasks:
       - vault write auth/jwt/config bound_issuer="https://app.terraform.io" oidc_discovery_url="https://app.terraform.io"
       - |
         vault policy write terraform-provisioner - <<'EOF'
+        # GCP token generation
         path "gcp/token/terraform-provisioner" { capabilities = ["read"] }
+        
+        # AAP OAuth2 credentials
         path "secret/data/aap/oauth2" { capabilities = ["read"] }
+        
+        # SSH secrets engine management
+        path "sys/mounts/ssh" { capabilities = ["create", "read", "update", "delete"] }
+        path "ssh/*" { capabilities = ["create", "read", "update", "delete", "list"] }
+        
+        # Policy management
+        path "sys/policies/acl/*" { capabilities = ["create", "read", "update", "delete", "list"] }
+        
+        # AppRole auth management
+        path "sys/auth/approle" { capabilities = ["create", "read", "update", "delete"] }
+        path "auth/approle/*" { capabilities = ["create", "read", "update", "delete", "list"] }
+        
+        # KV secrets for AppRole credentials
+        path "secret/data/aap/approle" { capabilities = ["create", "read", "update", "delete"] }
+        path "secret/metadata/aap/approle" { capabilities = ["create", "read", "update", "delete"] }
         EOF
       - |
         read -p "Enter your Terraform Cloud organization name: " ORG_NAME
