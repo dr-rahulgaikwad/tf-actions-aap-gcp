@@ -2,13 +2,20 @@
 # Based on: https://www.hashicorp.com/en/blog/managing-ansible-automation-platform-aap-credentials-at-scale-with-vault
 
 # Use existing SSH secrets engine (already enabled)
-data "vault_mount" "ssh" {
-  path = "ssh"
+resource "vault_mount" "ssh" {
+  path        = "ssh"
+  type        = "ssh"
+  description = "SSH secrets engine for AAP dynamic credentials"
+  
+  lifecycle {
+    prevent_destroy = true
+    ignore_changes  = all
+  }
 }
 
 # Configure SSH CA
 resource "vault_ssh_secret_backend_ca" "ssh_ca" {
-  backend              = data.vault_mount.ssh.path
+  backend              = vault_mount.ssh.path
   generate_signing_key = true
   
   lifecycle {
@@ -18,7 +25,7 @@ resource "vault_ssh_secret_backend_ca" "ssh_ca" {
 
 # Create SSH role for AAP (OS Login compatible)
 resource "vault_ssh_secret_backend_role" "aap_oslogin" {
-  backend  = data.vault_mount.ssh.path
+  backend  = vault_mount.ssh.path
   name     = "aap-oslogin"
   key_type = "ca"
 
@@ -56,13 +63,19 @@ EOT
 }
 
 # Use existing AppRole auth method (already enabled)
-data "vault_auth_backend" "approle" {
+resource "vault_auth_backend" "approle" {
+  type = "approle"
   path = "approle"
+  
+  lifecycle {
+    prevent_destroy = true
+    ignore_changes  = all
+  }
 }
 
 # Create AppRole for AAP
 resource "vault_approle_auth_backend_role" "aap_automation" {
-  backend        = data.vault_auth_backend.approle.path
+  backend        = vault_auth_backend.approle.path
   role_name      = "aap-automation"
   token_ttl      = 36000 # 10 hours
   token_max_ttl  = 86400 # 24 hours
@@ -74,13 +87,13 @@ resource "vault_approle_auth_backend_role" "aap_automation" {
 
 # Read AppRole Role ID
 data "vault_approle_auth_backend_role_id" "aap_role_id" {
-  backend   = data.vault_auth_backend.approle.path
+  backend   = vault_auth_backend.approle.path
   role_name = vault_approle_auth_backend_role.aap_automation.role_name
 }
 
 # Generate AppRole Secret ID
 resource "vault_approle_auth_backend_role_secret_id" "aap_secret_id" {
-  backend   = data.vault_auth_backend.approle.path
+  backend   = vault_auth_backend.approle.path
   role_name = vault_approle_auth_backend_role.aap_automation.role_name
 }
 
