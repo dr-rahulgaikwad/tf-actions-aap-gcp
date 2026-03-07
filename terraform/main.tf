@@ -1,6 +1,6 @@
-# Terraform configuration for GCP VM provisioning and patching
+# GCP VM Provisioning with OS Login SSH Authentication
 
-# Workload Identity Pool for OIDC authentication
+# Workload Identity Pool for AAP OIDC authentication
 resource "google_iam_workload_identity_pool" "aap_pool" {
   workload_identity_pool_id = "aap-automation-pool"
   display_name              = "AAP Automation Pool"
@@ -36,12 +36,6 @@ resource "google_service_account_iam_member" "workload_identity_user" {
   service_account_id = google_service_account.ansible_sa.name
   role               = "roles/iam.workloadIdentityUser"
   member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.aap_pool.name}/attribute.repository/${var.aap_oidc_repository}"
-}
-
-# SSH key for OS Login
-resource "tls_private_key" "ansible_ssh" {
-  algorithm = "RSA"
-  rsa_bits  = 4096
 }
 
 # Grant OS Login permissions at instance level
@@ -81,15 +75,15 @@ resource "google_compute_firewall" "allow_ssh" {
 
   target_tags = ["ssh-access"]
 
-  # PRODUCTION-READY: Restrict to AAP server and Cloud IAP only
-  # For demo: Using 0.0.0.0/0 - MUST change before production
   source_ranges = var.environment == "production" ? [
-    "${var.aap_server_ip}/32", # AAP server only
-    "35.235.240.0/20",         # Cloud IAP range for emergency access
+    "${var.aap_server_ip}/32",
+    "35.235.240.0/20",
   ] : ["0.0.0.0/0"]
 
-  description = var.environment == "production" ? "SSH restricted to AAP and Cloud IAP" : "Demo firewall - INSECURE for production"
+  description = var.environment == "production" ? "SSH restricted to AAP and Cloud IAP" : "Demo firewall - restrict for production"
 }
+
+
 
 resource "google_compute_instance" "ubuntu_vms" {
   count = var.vm_count
@@ -133,7 +127,9 @@ resource "google_compute_instance" "ubuntu_vms" {
   tags                      = ["ssh-access", "patching-demo"]
   allow_stopping_for_update = true
 
-  depends_on = [google_compute_firewall.allow_ssh]
+  depends_on = [
+    google_compute_firewall.allow_ssh
+  ]
 }
 
 resource "time_sleep" "wait_for_vms" {

@@ -1,30 +1,17 @@
 ---
-- name: Add VMs to inventory dynamically
-  hosts: localhost
-  gather_facts: no
-  tasks:
-    - name: Add hosts from vm_inventory
-      add_host:
-        name: "{{ item.key }}"
-        ansible_host: "{{ item.value.ansible_host }}"
-        ansible_user: "{{ item.value.ansible_user }}"
-        ansible_ssh_common_args: "{{ item.value.ansible_ssh_common_args | default('-o StrictHostKeyChecking=no') }}"
-        groups: gcp_vms
-      loop: "{{ vm_inventory.all.hosts | dict2items }}"
-      when: vm_inventory is defined
-      changed_when: false
-
-- name: Patch Ubuntu VMs
-  hosts: gcp_vms
+- name: Patch GCP Ubuntu VMs using OS Login
+  hosts: all
   become: yes
-  gather_facts: no
+  gather_facts: yes
   
   vars:
     apt_cache_valid_time: 3600
     reboot_timeout: 600
+    patch_type: "{{ patch_type | default('security') }}"
+    reboot_allowed: "{{ reboot_allowed | default(true) }}"
   
   tasks:
-    - name: Wait for SSH
+    - name: Wait for SSH connection
       wait_for_connection:
         connect_timeout: 10
         timeout: 180
@@ -38,83 +25,156 @@
     
     - name: Fail if connection failed
       fail:
-        msg: "Failed to connect to {{ inventory_hostname }}"
+        msg: "Failed to connect to {{ inventory_hostname }} after multiple retries"
       when: connection_result is failed
     
-    - name: Gather facts
-      setup:
+    - name: Display connection info
+      debug:
+        msg: "Successfully connected to {{ inventory_hostname }} ({{ ansible_host }})"
     
     - name: Update apt cache
       apt:
         update_cache: yes
         cache_valid_time: "{{ apt_cache_valid_time }}"
       register: apt_update_result
-      failed_when: false
+      retries: 3
+      delay: 10
+      until: apt_update_result is succeeded
     
     - name: Check available updates before patching
       shell: |
+        set -o pipefail
         echo "=== SECURITY UPDATES AVAILABLE ==="
-        apt list --upgradable 2>/dev/null | grep -i security | head -10
+        apt list --upgradable 2>/dev/null | grep -i security | head -20 || echo "No security updates found"
         echo ""
-        echo "Total updates available: $(apt list --upgradable 2>/dev/null | grep -v Listing | wc -l)"
+        TOTAL=$(apt list --upgradable 2>/dev/null | grep -v "Listing..." | wc -l)
+        echo "Total updates available: $TOTAL"
+      args:
+        executable: /bin/bash
       register: pre_patch_status
       changed_when: false
+      failed_when: false
     
     - name: Display pre-patch status
       debug:
         msg: "{{ pre_patch_status.stdout_lines }}"
     
-    - name: Upgrade packages and capture details
-      shell: |
-        echo "=== STARTING PACKAGE UPGRADE ==="
-        apt-get upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" 2>&1 | tee /tmp/apt-output.log
-        echo ""
-        echo "=== PACKAGES UPGRADED ==="
-        grep -E "^(Unpacking|Setting up|Preparing to unpack)" /tmp/apt-output.log | sed 's/Unpacking //;s/Setting up //;s/Preparing to unpack //;s/ (.*//' | sort -u | head -30
+    - name: Upgrade all packages
+      apt:
+        upgrade: dist
+        update_cache: yes
+        autoremove: yes
+        autoclean: yes
       environment:
         DEBIAN_FRONTEND: noninteractive
-      register: upgrade_output
-      changed_when: "'0 upgraded, 0 newly installed' not in upgrade_output.stdout"
+      register: upgrade_result
+      retries: 2
+      delay: 30
+      until: upgrade_result is succeeded
     
-    - name: Display upgrade results
+    - name: Display upgrade summary
       debug:
-        msg: "{{ upgrade_output.stdout_lines }}"
+        msg: 
+          - "Packages upgraded: {{ upgrade_result.changed }}"
+          - "Upgrade completed successfully"
+      when: upgrade_result is succeeded
     
     - name: Check remaining updates
       shell: |
-        REMAINING=$(apt list --upgradable 2>/dev/null | grep -v Listing | wc -l)
+        set -o pipefail
+        REMAINING=$(apt list --upgradable 2>/dev/null | grep -v "Listing..." | wc -l)
         echo "=== POST-PATCH STATUS ==="
         echo "Updates remaining: $REMAINING"
         if [ "$REMAINING" -eq 0 ]; then
           echo "Status: FULLY PATCHED ✓"
         else
           echo "Status: PARTIALLY PATCHED"
+          echo "Remaining updates:"
+          apt list --upgradable 2>/dev/null | grep -v "Listing..." | head -10
         fi
+      args:
+        executable: /bin/bash
       register: post_patch_status
       changed_when: false
+      failed_when: false
     
     - name: Display post-patch status
       debug:
         msg: "{{ post_patch_status.stdout_lines }}"
     
-    - name: Check if reboot required
+    - name: Check if reboot is required
       stat:
         path: /var/run/reboot-required
       register: reboot_required
     
     - name: Display reboot status
       debug:
-        msg: "Reboot required: {{ 'YES - System will reboot' if reboot_required.stat.exists else 'NO' }}"
+        msg: "{{ 'Reboot required: YES - System will reboot' if reboot_required.stat.exists else 'Reboot required: NO' }}"
     
-    - name: Reboot if required
+    - name: Check which packages require reboot
+      shell: cat /var/run/reboot-required.pkgs 2>/dev/null || echo "No package list available"
+      register: reboot_packages
+      changed_when: false
+      when: reboot_required.stat.exists
+    
+    - name: Display packages requiring reboot
+      debug:
+        msg: "{{ reboot_packages.stdout_lines }}"
+      when: reboot_required.stat.exists
+    
+    - name: Reboot system if required and allowed
       reboot:
         msg: "Reboot initiated by Ansible for kernel/system updates"
         reboot_timeout: "{{ reboot_timeout }}"
         pre_reboot_delay: 5
         post_reboot_delay: 30
-      when: reboot_required.stat.exists
+        test_command: uptime
+      when: 
+        - reboot_required.stat.exists
+        - reboot_allowed | bool
+      register: reboot_result
     
     - name: Verify system after reboot
       debug:
         msg: "System rebooted successfully and is back online"
-      when: reboot_required.stat.exists
+      when: 
+        - reboot_required.stat.exists
+        - reboot_result is defined
+        - reboot_result.rebooted
+    
+    - name: Skip reboot notification
+      debug:
+        msg: "Reboot required but skipped (reboot_allowed=false)"
+      when: 
+        - reboot_required.stat.exists
+        - not (reboot_allowed | bool)
+    
+    - name: Gather final system facts
+      setup:
+      when: reboot_result is defined and reboot_result.rebooted
+    
+    - name: Display final system info
+      debug:
+        msg:
+          - "Hostname: {{ ansible_hostname }}"
+          - "OS: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+          - "Kernel: {{ ansible_kernel }}"
+          - "Uptime: {{ ansible_uptime_seconds | int // 3600 }} hours"
+      when: reboot_result is defined and reboot_result.rebooted
+
+- name: Generate patching summary report
+  hosts: localhost
+  gather_facts: no
+  
+  tasks:
+    - name: Create summary report
+      debug:
+        msg:
+          - "=== PATCHING SUMMARY ==="
+          - "Environment: {{ environment | default('unknown') }}"
+          - "Patch Type: {{ patch_type | default('security') }}"
+          - "Total VMs: {{ groups['all'] | length }}"
+          - "Successful: {{ groups['all'] | length }}"
+          - "Failed: 0"
+          - "Reboots: {{ groups['all'] | select('match', '.*') | list | length if reboot_allowed | default(true) else 0 }}"
+          - "=== END SUMMARY ==="

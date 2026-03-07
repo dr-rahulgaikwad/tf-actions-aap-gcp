@@ -37,14 +37,22 @@ output "oidc_configuration" {
   }
 }
 
-output "ansible_ssh_public_key" {
-  description = "SSH public key to add to your OS Login profile"
-  value       = tls_private_key.ansible_ssh.public_key_openssh
-  sensitive   = true
+output "os_login_setup_command" {
+  description = "Command to add SSH key to OS Login"
+  value       = "gcloud compute os-login ssh-keys add --key-file=~/.ssh/id_rsa.pub"
 }
 
-output "ansible_ssh_private_key" {
-  description = "SSH private key for AAP credential (sensitive)"
-  value       = tls_private_key.ansible_ssh.private_key_pem
-  sensitive   = true
+output "os_login_username_command" {
+  description = "Command to get OS Login username"
+  value       = "gcloud compute os-login describe-profile"
+}
+
+output "aap_inventory_id" {
+  description = "AAP inventory ID for VM management"
+  value       = aap_inventory.vms.id
+}
+
+output "aap_inventory_name" {
+  description = "AAP inventory name"
+  value       = aap_inventory.vms.name
 }
