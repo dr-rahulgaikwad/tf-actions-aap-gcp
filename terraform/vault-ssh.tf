@@ -1,22 +1,24 @@
 # Vault SSH Secrets Engine Configuration for AAP
 # Based on: https://www.hashicorp.com/en/blog/managing-ansible-automation-platform-aap-credentials-at-scale-with-vault
 
-# Enable SSH secrets engine
-resource "vault_mount" "ssh" {
-  path        = "ssh"
-  type        = "ssh"
-  description = "SSH secrets engine for AAP dynamic credentials"
+# Use existing SSH secrets engine (already enabled)
+data "vault_mount" "ssh" {
+  path = "ssh"
 }
 
 # Configure SSH CA
 resource "vault_ssh_secret_backend_ca" "ssh_ca" {
-  backend              = vault_mount.ssh.path
+  backend              = data.vault_mount.ssh.path
   generate_signing_key = true
+  
+  lifecycle {
+    ignore_changes = all
+  }
 }
 
 # Create SSH role for AAP (OS Login compatible)
 resource "vault_ssh_secret_backend_role" "aap_oslogin" {
-  backend  = vault_mount.ssh.path
+  backend  = data.vault_mount.ssh.path
   name     = "aap-oslogin"
   key_type = "ca"
 
@@ -53,15 +55,14 @@ path "ssh/config/ca" {
 EOT
 }
 
-# Enable AppRole auth method (if not already enabled)
-resource "vault_auth_backend" "approle" {
-  type = "approle"
+# Use existing AppRole auth method (already enabled)
+data "vault_auth_backend" "approle" {
   path = "approle"
 }
 
 # Create AppRole for AAP
 resource "vault_approle_auth_backend_role" "aap_automation" {
-  backend        = vault_auth_backend.approle.path
+  backend        = data.vault_auth_backend.approle.path
   role_name      = "aap-automation"
   token_ttl      = 36000 # 10 hours
   token_max_ttl  = 86400 # 24 hours
@@ -73,13 +74,13 @@ resource "vault_approle_auth_backend_role" "aap_automation" {
 
 # Read AppRole Role ID
 data "vault_approle_auth_backend_role_id" "aap_role_id" {
-  backend   = vault_auth_backend.approle.path
+  backend   = data.vault_auth_backend.approle.path
   role_name = vault_approle_auth_backend_role.aap_automation.role_name
 }
 
 # Generate AppRole Secret ID
 resource "vault_approle_auth_backend_role_secret_id" "aap_secret_id" {
-  backend   = vault_auth_backend.approle.path
+  backend   = data.vault_auth_backend.approle.path
   role_name = vault_approle_auth_backend_role.aap_automation.role_name
 }
 

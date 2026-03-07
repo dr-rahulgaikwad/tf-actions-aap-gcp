@@ -57,11 +57,11 @@ variable "vm_machine_type" {
 variable "ubuntu_image" {
   description = "Ubuntu OS image for VMs"
   type        = string
-  default     = "ubuntu-os-cloud/ubuntu-2004-lts"
+  default     = "projects/ubuntu-os-cloud/global/images/family/ubuntu-2004-lts"
 
   validation {
-    condition     = can(regex("^ubuntu-os-cloud/ubuntu-[0-9]{4}-", var.ubuntu_image))
-    error_message = "Ubuntu image must be from ubuntu-os-cloud family."
+    condition     = can(regex("ubuntu", var.ubuntu_image))
+    error_message = "Ubuntu image must contain 'ubuntu' in the name."
   }
 }
 
