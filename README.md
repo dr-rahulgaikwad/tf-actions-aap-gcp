@@ -265,7 +265,7 @@ aap_hostname            = "https://your-aap-server"
 aap_oidc_issuer_url     = "https://your-aap-server"
 aap_oidc_repository     = "your-org/your-repo"
 aap_job_template_id     = 14  # Update after creating job template
-ansible_user            = "your_email_domain_com"  # From OS Login
+ansible_user            = "your_email_domain_com"  # From 'task setup-os-login' (e.g., 'rahul_gaikwad_hashicorp_com')
 environment             = "demo"
 vm_count                = 2
 ```
@@ -279,7 +279,7 @@ task setup-os-login
 # Output:
 # ✓ SSH key generated (if needed)
 # ✓ Key added to OS Login
-# Your OS Login username: your_email_domain_com
+# Your OS Login username: rahul_gaikwad_hashicorp_com
 
 # Use this username in Terraform variable 'ansible_user'
 ```

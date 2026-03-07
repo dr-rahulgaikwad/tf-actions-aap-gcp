@@ -173,7 +173,16 @@ tasks:
     desc: "Setup Vault SSH secrets engine for dynamic AAP credentials"
     cmds:
       - echo "=== Setting up Vault SSH Secrets Engine ==="
-      - bash scripts/setup-vault-ssh.sh
+      - |
+        # Check if VAULT_ADDR is set, if not prompt user
+        if [ -z "$VAULT_ADDR" ]; then
+          echo "Error: VAULT_ADDR environment variable not set"
+          echo "Please set it first:"
+          echo "  export VAULT_ADDR='https://your-vault.vault.hashicorp.cloud:8200'"
+          echo "  export VAULT_NAMESPACE='admin'"
+          exit 1
+        fi
+        bash scripts/setup-vault-ssh.sh
       - echo ""
       - echo "✓ Vault SSH setup complete"
       - echo ""

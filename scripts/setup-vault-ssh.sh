@@ -39,8 +39,13 @@ echo ""
 
 # 2. Configure SSH CA
 echo "2. Configuring SSH Certificate Authority..."
-vault write ssh/config/ca generate_signing_key=true
-echo "   ✓ SSH CA configured"
+if vault read ssh/config/ca >/dev/null 2>&1; then
+  echo "   SSH CA already configured, skipping..."
+  echo "   ✓ Using existing SSH CA"
+else
+  vault write ssh/config/ca generate_signing_key=true
+  echo "   ✓ SSH CA configured"
+fi
 echo ""
 
 # 3. Create SSH role for OS Login
@@ -52,8 +57,7 @@ vault write ssh/roles/aap-oslogin \
   allow_user_certificates=true \
   allowed_users="*" \
   allowed_extensions="permit-pty,permit-port-forwarding" \
-  default_extensions_template=true \
-  default_extensions="permit-pty={{}}"
+  'default_extensions[permit-pty]='
 
 echo "   ✓ SSH role 'aap-oslogin' created"
 echo "   - Key Type: CA (Certificate Authority)"

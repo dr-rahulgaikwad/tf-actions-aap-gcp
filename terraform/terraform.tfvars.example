@@ -23,7 +23,7 @@ aap_oidc_repository     = "your-org/your-repo"
 aap_job_template_id     = 14  # Update after creating job template in AAP
 
 # SSH Configuration (from OS Login)
-ansible_user            = "your_email_domain_com"  # Get from: gcloud compute os-login describe-profile
+ansible_user            = "rahul_gaikwad_hashicorp_com"  # Get from: gcloud compute os-login describe-profile --format='value(posixAccounts[0].username)'
 
 # Environment Configuration
 environment             = "demo"  # Options: demo, dev, staging, production

@@ -115,12 +115,12 @@ variable "aap_job_template_id" {
 }
 
 variable "ansible_user" {
-  description = "OS Login username for Ansible SSH access (e.g., your_email_domain_com)"
+  description = "OS Login username for Ansible SSH access (e.g., your_email_domain_com). Get this from 'gcloud compute os-login describe-profile' or 'task setup-os-login'"
   type        = string
 
   validation {
     condition     = can(regex("^[a-z][a-z0-9_]*$", var.ansible_user))
-    error_message = "Ansible user must start with a letter and contain only lowercase letters, numbers, and underscores."
+    error_message = "Ansible user must be in OS Login format: start with a letter and contain only lowercase letters, numbers, and underscores (e.g., 'rahul_gaikwad_hashicorp_com'). Get your OS Login username with: gcloud compute os-login describe-profile --format='value(posixAccounts[0].username)'"
   }
 }
 
