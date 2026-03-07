@@ -167,36 +167,136 @@ tasks:
       - gcloud compute os-login describe-profile --format="value(posixAccounts[0].username)"
       - echo "✓ Use this username in Terraform variable 'ansible_user'"
 
+
+  # Vault SSH setup for dynamic AAP credentials
+  setup-vault-ssh:
+    desc: "Setup Vault SSH secrets engine for dynamic AAP credentials"
+    cmds:
+      - echo "=== Setting up Vault SSH Secrets Engine ==="
+      - bash scripts/setup-vault-ssh.sh
+      - echo ""
+      - echo "✓ Vault SSH setup complete"
+      - echo ""
+      - echo "Next steps:"
+      - echo "1. Run 'task get-vault-ssh-ca' to get CA public key"
+      - echo "2. Run 'task setup-aap-vault-credential' for AAP setup instructions"
+
+  get-vault-ssh-ca:
+    desc: "Get Vault SSH CA public key for GCP OS Login"
+    cmds:
+      - echo "=== Vault SSH CA Public Key ==="
+      - vault read -field=public_key ssh/config/ca
+      - echo ""
+      - echo "Add this key to GCP OS Login:"
+      - echo "gcloud compute os-login ssh-keys add --key='<paste-key-above>' --ttl=365d"
+
+  setup-aap-vault-credential:
+    desc: "Display instructions for setting up Vault SSH credential in AAP"
+    cmds:
+      - echo "=== AAP Vault SSH Credential Setup ==="
+      - echo ""
+      - echo "1. Create Custom Credential Type in AAP"
+      - echo "   - Administration > Credential Types > Add"
+      - echo "   - Name - Vault SSH Certificate"
+      - echo "   - Copy content from scripts/aap-credential-type.json"
+      - echo ""
+      - echo "2. Get AppRole Credentials"
+      - echo "   - Run 'task get-vault-approle-creds'"
+      - echo ""
+      - echo "3. Create Credential in AAP"
+      - echo "   - Credentials > Add"
+      - echo "   - Credential Type - Vault SSH Certificate"
+      - echo "   - Fill in values from step 2"
+      - echo "   - SSH Username - from 'task setup-os-login'"
+      - echo "   - SSH Public Key - paste content of $HOME/.ssh/id_rsa.pub"
+      - echo ""
+      - echo "4. Use in Job Templates"
+      - echo "   - Credentials will be dynamically generated (10-min TTL)"
+      - echo "   - Automatic rotation on each job run"
+      - echo "   - No static credentials stored in AAP"
+
+  get-vault-approle-creds:
+    desc: "Get AppRole credentials for AAP Vault SSH setup"
+    cmds:
+      - echo "=== AppRole Credentials for AAP ==="
+      - echo ""
+      - echo "Role ID:"
+      - vault kv get -field=role_id secret/aap/approle
+      - echo ""
+      - echo "Secret ID:"
+      - vault kv get -field=secret_id secret/aap/approle
+      - echo ""
+      - echo "Vault Address - $VAULT_ADDR"
+      - echo "Vault Namespace - $VAULT_NAMESPACE"
+      - echo "SSH Role - aap-oslogin"
+
+
+  test-vault-ssh:
+    desc: "Test Vault SSH secrets engine integration"
+    cmds:
+      - echo "=== Testing Vault SSH Integration ==="
+      - bash scripts/test-vault-ssh.sh
+
+  test-local-setup:
+    desc: "Comprehensive local testing of all Vault SSH setup steps"
+    cmds:
+      - echo "=== Running Comprehensive Local Tests ==="
+      - bash scripts/test-local-setup.sh
+
+
+
+
+
   # AAP setup guide
   setup-aap-guide:
-    desc: "Display AAP setup instructions"
+    desc: "Display AAP setup instructions for AAP 2.6"
     cmds:
-      - echo "=== AAP Setup Guide ==="
+      - echo "=== AAP 2.6 Setup Guide (Simplified) ==="
       - echo ""
-      - echo "1. Create OAuth2 Application in AAP"
-      - echo "   - Go to Administration > Applications > Add"
+      - echo "IMPORTANT - This playbook only needs SSH access to VMs"
+      - echo "No GCP API credentials required in AAP"
+      - echo ""
+      - echo "1. Create OAuth2 Application"
+      - echo "   - Administration > Applications > Add"
       - echo "   - Name - Terraform Automation"
       - echo "   - Grant Type - Resource owner password-based"
       - echo "   - Client Type - Confidential"
-      - echo "   - Save and note Client ID/Secret"
+      - echo "   - Save and note Client ID and Secret"
       - echo ""
-      - echo "2. Create GCP OIDC Credential"
-      - echo "   - Run - task get-oidc-config"
-      - echo "   - Go to Credentials > Add"
-      - echo "   - Type - Google Cloud Platform"
-      - echo "   - Auth - Workload Identity Federation"
-      - echo "   - Fill values from output above"
+      - echo "2. Create SSH Credential"
+      - echo "   Option A - Static Credential (Quick Start)"
+      - echo "   - Credentials > Add"
+      - echo "   - Name - OS Login SSH"
+      - echo "   - Credential Type - Machine"
+      - echo "   - Username - Run 'task setup-os-login' to get username"
+      - echo "   - SSH Private Key - Paste content of $HOME/.ssh/id_rsa"
+      - echo "   - Privilege Escalation Method - sudo"
       - echo ""
-      - echo "3. Create SSH Credential"
-      - echo "   - Type - Machine"
-      - echo "   - Username - from task setup-os-login"
-      - echo "   - SSH Key - ~/.ssh/id_rsa"
+      - echo "   Option B - Vault-Managed (Production Recommended)"
+      - echo "   - Configure Vault SSH secrets engine"
+      - echo "   - Create custom AAP credential type for Vault"
+      - echo "   - Credentials auto-rotate, never stored in AAP"
+      - echo "   - See https://www.hashicorp.com/en/blog/managing-ansible-automation-platform-aap-credentials-at-scale-with-vault"
+      - echo ""
+      - echo "3. Inventory (Automatically Created by Terraform)"
+      - echo "   IMPORTANT - No manual inventory setup needed!"
+      - echo "   - Terraform creates inventory automatically via aap_inventory resource"
+      - echo "   - Inventory name - {environment}-gcp-vms (e.g. demo-gcp-vms)"
+      - echo "   - Hosts are auto-registered with connection details"
+      - echo "   - Updates automatically when VMs change"
+      - echo "   - See terraform/actions.tf for implementation"
       - echo ""
       - echo "4. Create Job Template"
-      - echo "   - Inventory - created by Terraform"
+      - echo "   - Templates > Add > Job Template"
+      - echo "   - Name - Patch GCP VMs"
+      - echo "   - Inventory - GCP VMs"
+      - echo "   - Project - Your project with playbook"
       - echo "   - Playbook - ansible/gcp_vm_patching_demo.yml"
-      - echo "   - Credentials - GCP OIDC and SSH"
-      - echo "   - Note Template ID for Terraform variable"
+      - echo "   - Credentials - Select ONLY the SSH credential"
+      - echo "   - Variables - patch_type=security, reboot_allowed=true"
+      - echo "   - Note the Template ID for Terraform variable"
+      - echo ""
+      - echo "That is it! No GCP credentials needed in AAP."
 
   # Helper tasks
   get-oidc-config:
@@ -204,6 +304,43 @@ tasks:
     dir: "{{.TERRAFORM_DIR}}"
     cmds:
       - terraform output oidc_configuration
+
+  get-gcp-sa-email:
+    desc: "Get GCP service account email for AAP credential"
+    cmds:
+      - |
+        PROJECT_ID=$(gcloud config get-value project)
+        echo "Service Account Email: terraform-aap@${PROJECT_ID}.iam.gserviceaccount.com"
+        echo ""
+        echo "If this service account does not exist, create it with:"
+        echo "gcloud iam service-accounts create terraform-aap --display-name='Terraform AAP'"
+
+  get-gcp-sa-key:
+    desc: "Create and display GCP service account key for AAP"
+    cmds:
+      - |
+        PROJECT_ID=$(gcloud config get-value project)
+        SA_EMAIL="terraform-aap@${PROJECT_ID}.iam.gserviceaccount.com"
+        echo "Checking if service account exists..."
+        if ! gcloud iam service-accounts describe ${SA_EMAIL} >/dev/null 2>&1; then
+          echo "Service account does not exist. Creating..."
+          gcloud iam service-accounts create terraform-aap --display-name="Terraform AAP"
+          echo "Granting necessary permissions..."
+          gcloud projects add-iam-policy-binding ${PROJECT_ID} --member="serviceAccount:${SA_EMAIL}" --role="roles/compute.instanceAdmin.v1" --condition=None
+          gcloud projects add-iam-policy-binding ${PROJECT_ID} --member="serviceAccount:${SA_EMAIL}" --role="roles/compute.osLogin" --condition=None
+          echo "Waiting for IAM propagation (5 seconds)..."
+          sleep 5
+        fi
+        echo "Creating service account key..."
+        gcloud iam service-accounts keys create /tmp/aap-sa-key.json --iam-account=${SA_EMAIL}
+        echo ""
+        echo "=== Copy the content below and paste into AAP credential ==="
+        cat /tmp/aap-sa-key.json
+        echo ""
+        echo "=== End of key content ==="
+        rm -f /tmp/aap-sa-key.json
+        echo ""
+        echo "Key has been deleted from local system for security"
 
   test-vault:
     desc: "Test Vault configuration"
@@ -225,14 +362,14 @@ tasks:
     desc: "Check if VMs are running"
     cmds:
       - echo "Checking VMs..."
-      - gcloud compute instances list --filter="labels.managed_by=terraform"
+      - gcloud compute instances list --filter="labels.goog-terraform-provisioned:true"
 
   test-connectivity:
     desc: "Test SSH connectivity to VMs"
     cmds:
       - echo "Testing SSH connectivity..."
       - |
-        VM_NAME=$(gcloud compute instances list --filter="labels.managed_by=terraform" --format="value(name)" --limit=1)
+        VM_NAME=$(gcloud compute instances list --filter="labels.goog-terraform-provisioned:true" --format="value(name)" --limit=1)
         if [ -n "$VM_NAME" ]; then
           gcloud compute ssh $VM_NAME --command="echo 'SSH connection successful'" --tunnel-through-iap
         else
@@ -256,15 +393,27 @@ tasks:
     cmds:
       - echo "=== Project Information ==="
       - echo "Project - Terraform Actions with AAP and GCP VM Patching"
-      - echo "Version - v2.0.0"
-      - echo "Security - Zero static credentials"
+      - echo "Version - v2.1.0 (with Vault SSH)"
+      - echo "Security - Zero static credentials (truly!)"
+      - echo "Tasks - 26 automated tasks"
       - echo ""
-      - echo "Quick Start"
+      - echo "Quick Start (Static SSH)"
       - echo "  1. task validate"
       - echo "  2. task setup-vault"
       - echo "  3. task setup-os-login"
       - echo "  4. Push to GitHub (triggers HCP Terraform)"
       - echo "  5. task setup-aap-guide"
+      - echo "  6. task test-deployment"
+      - echo ""
+      - echo "Production Setup (Vault SSH)"
+      - echo "  1. task validate"
+      - echo "  2. task setup-vault"
+      - echo "  3. task setup-vault-ssh"
+      - echo "  4. task setup-os-login"
+      - echo "  5. task get-vault-ssh-ca (add to GCP OS Login)"
+      - echo "  6. Push to GitHub"
+      - echo "  7. task setup-aap-vault-credential"
+      - echo "  8. task test-vault-ssh"
       - echo ""
       - echo "For detailed documentation see README.md"
 
