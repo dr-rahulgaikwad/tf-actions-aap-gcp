@@ -7,6 +7,11 @@ resource "aap_inventory" "vms" {
   organization = 1
 }
 
+resource "time_sleep" "wait_for_aap" {
+  depends_on      = [aap_inventory.vms]
+  create_duration = "15s"
+}
+
 # Register VMs in AAP Inventory
 resource "aap_host" "vms" {
   for_each = { for idx, vm in google_compute_instance.ubuntu_vms : vm.name => vm }
@@ -22,6 +27,7 @@ resource "aap_host" "vms" {
   })
 
   depends_on = [
+    time_sleep.wait_for_aap,
     google_compute_instance.ubuntu_vms,
     google_compute_instance_iam_member.ansible_oslogin_admin
   ]
