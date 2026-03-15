@@ -96,9 +96,10 @@ action "aap_job_launch" "patch_vms" {
 }
 
 # Trigger Resource - Executes Action on Infrastructure Changes
-# Triggers AAP job when VMs are created or updated
+# Only triggers when aap_job_template_id is set (> 0)
 resource "terraform_data" "trigger_patch" {
-  # Input values that trigger the action when changed
+  count = var.aap_job_template_id > 0 ? 1 : 0
+
   input = {
     vm_count        = length(google_compute_instance.ubuntu_vms)
     vm_names        = [for vm in google_compute_instance.ubuntu_vms : vm.name]
@@ -107,18 +108,13 @@ resource "terraform_data" "trigger_patch" {
     environment     = var.environment
   }
 
-  # Lifecycle configuration for action triggers
   lifecycle {
     action_trigger {
-      # Trigger on VM creation and updates
-      events = [after_create, after_update]
-
-      # Action to execute
+      events  = [after_create, after_update]
       actions = [action.aap_job_launch.patch_vms]
     }
   }
 
-  # Ensure all dependencies are ready before triggering
   depends_on = [
     time_sleep.wait_for_vms,
     aap_host.vms,

@@ -2,7 +2,7 @@
 
 # Workload Identity Pool for AAP OIDC authentication
 resource "google_iam_workload_identity_pool" "aap_pool" {
-  workload_identity_pool_id = "aap-automation-pool"
+  workload_identity_pool_id = "aap-pool"
   display_name              = "AAP Automation Pool"
   description               = "Workload Identity Pool for Ansible Automation Platform OIDC"
 }
