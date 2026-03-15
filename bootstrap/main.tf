@@ -111,6 +111,7 @@ resource "vault_gcp_secret_roleset" "terraform_provisioner" {
       "roles/compute.securityAdmin",
       "roles/compute.osLogin",
       "roles/iam.serviceAccountAdmin",
+      "roles/iam.serviceAccountUser",
       "roles/iam.workloadIdentityPoolAdmin",
     ]
   }
