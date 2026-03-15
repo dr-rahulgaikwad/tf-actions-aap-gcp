@@ -8,31 +8,29 @@ resource "aap_inventory" "vms" {
 }
 
 # Register VMs in AAP Inventory
-# NOTE: Temporarily disabled due to AAP API 502 errors
-# Hosts can be added manually or via AAP dynamic inventory
-# resource "aap_host" "vms" {
-#   for_each = { for idx, vm in google_compute_instance.ubuntu_vms : vm.name => vm }
-#
-#   name         = each.value.name
-#   inventory_id = aap_inventory.vms.id
-#
-#   variables = jsonencode({
-#     ansible_host = each.value.network_interface[0].access_config[0].nat_ip
-#     ansible_user = var.ansible_user
-#     instance_id  = each.value.instance_id
-#     zone         = each.value.zone
-#     environment  = var.environment
-#   })
-#
-#   depends_on = [
-#     google_compute_instance.ubuntu_vms,
-#     google_compute_instance_iam_member.ansible_oslogin_admin
-#   ]
-# }
+resource "aap_host" "vms" {
+  for_each = { for idx, vm in google_compute_instance.ubuntu_vms : vm.name => vm }
+
+  name         = each.value.name
+  inventory_id = aap_inventory.vms.id
+
+  variables = jsonencode({
+    ansible_host = each.value.network_interface[0].access_config[0].nat_ip
+    instance_id  = each.value.instance_id
+    zone         = each.value.zone
+    environment  = var.environment
+  })
+
+  depends_on = [
+    google_compute_instance.ubuntu_vms,
+    google_compute_instance_iam_member.ansible_oslogin_admin
+  ]
+}
 
 # VM Inventory for AAP Playbook
 # Structured inventory passed to Ansible via extra_vars
 locals {
+  # VM inventory for AAP Playbook
   vm_inventory = {
     all = {
       hosts = {
@@ -41,7 +39,6 @@ locals {
           instance_id  = vm.instance_id
           internal_ip  = vm.network_interface[0].network_ip
           zone         = vm.zone
-          ansible_user = var.ansible_user
         }
       }
       vars = {
@@ -124,7 +121,7 @@ resource "terraform_data" "trigger_patch" {
   # Ensure all dependencies are ready before triggering
   depends_on = [
     time_sleep.wait_for_vms,
-    # aap_host.vms,  # Disabled due to AAP API 502 errors
+    aap_host.vms,
     google_compute_instance_iam_member.ansible_oslogin_admin
   ]
 }

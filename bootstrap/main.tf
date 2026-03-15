@@ -58,7 +58,8 @@ resource "vault_jwt_auth_backend_role" "tfc" {
   role_name      = "terraform-cloud"
   token_policies = [vault_policy.terraform_provisioner.name]
 
-  bound_audiences = ["vault.workload.identity"]
+  bound_audiences    = ["vault.workload.identity"]
+  bound_claims_type  = "glob"
   bound_claims = {
     sub = "organization:${var.tfc_organization}:project:*:workspace:*:run_phase:*"
   }

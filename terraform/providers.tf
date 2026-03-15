@@ -6,7 +6,7 @@ terraform {
   cloud {
     organization = "rahul-tfc"
     workspaces {
-      name = "tf-actions-aap-gcp"
+      name = "tf-actions-vault-aap-gcp"
     }
   }
 
@@ -61,21 +61,15 @@ provider "google" {
   region       = var.gcp_region
 }
 
-# Dynamic AAP OAuth2 Credentials from Vault
-# Vault KV v2 stores AAP OAuth2 application credentials
-# Credentials are read at runtime, not stored in code or state
-data "vault_kv_secret_v2" "aap_oauth2" {
+# Dynamic AAP Credentials from Vault
+data "vault_kv_secret_v2" "aap_creds" {
   mount = "secret"
-  name  = "aap/oauth2"
+  name  = "aap/credentials"
 }
 
 # Ansible Automation Platform Provider - Dynamic Credentials
-# Uses OAuth2 credentials from Vault
-# OAuth2 token TTL: 10 hours (configured in AAP)
-# Required environment variable in HCP Terraform workspace:
-#   - AAP_INSECURE_SKIP_VERIFY=true (only for demo with self-signed certs)
 provider "aap" {
-  host     = var.aap_hostname
-  username = data.vault_kv_secret_v2.aap_oauth2.data["username"]
-  password = data.vault_kv_secret_v2.aap_oauth2.data["password"]
+  host     = data.vault_kv_secret_v2.aap_creds.data["hostname"]
+  username = data.vault_kv_secret_v2.aap_creds.data["username"]
+  password = data.vault_kv_secret_v2.aap_creds.data["password"]
 }

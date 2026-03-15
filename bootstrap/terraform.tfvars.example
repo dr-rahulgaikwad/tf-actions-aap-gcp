@@ -14,7 +14,7 @@ aap_password = "your-password"
 
 # TFC Configuration
 tfc_organization   = "your-org"
-tfc_workspace_name = "tf-actions-aap-gcp"
+tfc_workspace_name = "tf-actions-vault-aap-gcp"
 
 # Infrastructure Configuration
 aap_job_template_id = 0  # Update after creating AAP job template
