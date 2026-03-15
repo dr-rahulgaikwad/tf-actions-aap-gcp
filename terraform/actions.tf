@@ -9,7 +9,7 @@ resource "aap_inventory" "vms" {
 
 resource "time_sleep" "wait_for_aap" {
   depends_on      = [aap_inventory.vms]
-  create_duration = "15s"
+  create_duration = "60s"
 }
 
 # Register VMs in AAP Inventory
