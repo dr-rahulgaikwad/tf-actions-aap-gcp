@@ -671,8 +671,8 @@ gcloud services enable compute.googleapis.com \
 
 #### KV Secrets Engine
 - [ ] KV v2 enabled at `secret/`
-- [ ] AAP OAuth2 credentials stored: `vault kv put secret/aap/oauth2 ...`
-- [ ] Credentials tested: `vault kv get secret/aap/oauth2`
+- [ ] AAP credentials stored: `vault kv put secret/aap/credentials hostname=... username=... password=...`
+- [ ] Credentials tested: `vault kv get secret/aap/credentials`
 
 ### 3. AAP Setup
 

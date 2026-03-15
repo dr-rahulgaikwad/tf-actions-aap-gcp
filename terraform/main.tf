@@ -136,29 +136,3 @@ resource "time_sleep" "wait_for_vms" {
   depends_on      = [google_compute_instance.ubuntu_vms]
   create_duration = "120s"
 }
-
-resource "google_os_config_patch_deployment" "ubuntu_patches" {
-  patch_deployment_id = "ubuntu-security-patches"
-
-  instance_filter {
-    all = false
-    group_labels {
-      labels = {
-        environment = var.environment
-        os          = "ubuntu"
-      }
-    }
-  }
-
-  patch_config {
-    apt {
-      type     = "DIST"
-      excludes = []
-    }
-    reboot_config = "DEFAULT"
-  }
-
-  one_time_schedule {
-    execute_time = "2026-12-31T23:59:59Z"
-  }
-}
