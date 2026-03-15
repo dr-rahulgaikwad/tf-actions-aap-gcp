@@ -1,0 +1,22 @@
+# GCP Configuration
+gcp_project_id = "your-project-id"
+gcp_region     = "us-central1"
+gcp_zone       = "us-central1-a"
+
+# Vault Configuration
+vault_addr      = "https://your-vault.vault.hashicorp.cloud:8200"
+vault_namespace = "admin"
+
+# AAP Configuration
+aap_hostname = "https://your-aap-server"
+aap_username = "admin"
+aap_password = "your-password"
+
+# TFC Configuration
+tfc_organization   = "your-org"
+tfc_workspace_name = "tf-actions-aap-gcp"
+
+# Infrastructure Configuration
+aap_job_template_id = 0  # Update after creating AAP job template
+environment         = "demo"
+vm_count            = 3
