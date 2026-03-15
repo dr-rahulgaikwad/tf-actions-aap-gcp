@@ -60,12 +60,24 @@
         dest: /tmp/aap_ssh_key-cert.pub
         mode: "0600"
 
+    - name: Set SSH connection vars for all hosts
+      add_host:
+        name: "{{ item }}"
+        ansible_ssh_private_key_file: /tmp/aap_ssh_key
+        ansible_ssh_common_args: >-
+          -o CertificateFile=/tmp/aap_ssh_key-cert.pub
+          -o StrictHostKeyChecking=no
+          -o UserKnownHostsFile=/dev/null
+      loop: "{{ groups['all'] }}"
+
     - name: Debug SSH setup
       debug:
         msg:
           - "Vault auth: OK"
           - "SSH cert signed for principal: {{ vault_ssh_user | default(ansible_user) }}"
           - "Cert serial: {{ vault_ssh_cert.json.data.serial_number }}"
+          - "Private key: /tmp/aap_ssh_key"
+          - "Certificate: /tmp/aap_ssh_key-cert.pub"
 
 # Play 2: Patch VMs using the signed certificate
 - name: Patch GCP Ubuntu VMs using OS Login
