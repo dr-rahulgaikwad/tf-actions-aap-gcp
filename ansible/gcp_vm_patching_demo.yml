@@ -60,16 +60,6 @@
         dest: /tmp/aap_ssh_key-cert.pub
         mode: "0600"
 
-    - name: Set SSH connection vars for all hosts
-      add_host:
-        name: "{{ item }}"
-        ansible_ssh_private_key_file: /tmp/aap_ssh_key
-        ansible_ssh_common_args: >-
-          -o CertificateFile=/tmp/aap_ssh_key-cert.pub
-          -o StrictHostKeyChecking=no
-          -o UserKnownHostsFile=/dev/null
-      loop: "{{ groups['all'] }}"
-
     - name: Debug SSH setup
       debug:
         msg:
@@ -90,20 +80,13 @@
     reboot_timeout: 600
     patch_type: "{{ patch_type | default('security') }}"
     reboot_allowed: "{{ reboot_allowed | default(true) }}"
+    ansible_ssh_private_key_file: /tmp/aap_ssh_key
+    ansible_ssh_common_args: >-
+      -o CertificateFile=/tmp/aap_ssh_key-cert.pub
+      -o StrictHostKeyChecking=no
+      -o UserKnownHostsFile=/dev/null
 
   pre_tasks:
-    - name: Wait for SSH port to be available
-      wait_for:
-        host: "{{ ansible_host }}"
-        port: 22
-        timeout: 180
-        delay: 10
-      delegate_to: localhost
-      retries: 5
-      delay: 15
-      register: ssh_port_check
-      until: ssh_port_check is succeeded
-
     - name: Wait for SSH connection
       wait_for_connection:
         connect_timeout: 15
