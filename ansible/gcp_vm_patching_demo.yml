@@ -1,68 +1,142 @@
 ---
+# Play 1: Sign SSH certificate via Vault (runs on AAP execution node)
+- name: Setup Vault SSH certificate
+  hosts: localhost
+  gather_facts: no
+
+  tasks:
+    - name: Authenticate to Vault via AppRole
+      uri:
+        url: "{{ lookup('env', 'VAULT_ADDR') }}/v1/auth/approle/login"
+        method: POST
+        headers:
+          X-Vault-Namespace: "{{ lookup('env', 'VAULT_NAMESPACE') | default('admin', true) }}"
+        body_format: json
+        body:
+          role_id: "{{ lookup('env', 'VAULT_ROLE_ID') }}"
+          secret_id: "{{ lookup('env', 'VAULT_SECRET_ID') }}"
+        validate_certs: no
+        status_code: 200
+      register: vault_login
+      retries: 3
+      delay: 5
+      until: vault_login.status == 200
+
+    - name: Set Vault token fact
+      set_fact:
+        vault_token: "{{ vault_login.json.auth.client_token }}"
+
+    - name: Generate ephemeral SSH keypair
+      command: ssh-keygen -t ed25519 -f /tmp/aap_ssh_key -N "" -C "aap-ephemeral"
+      args:
+        creates: /tmp/aap_ssh_key
+
+    - name: Read public key
+      slurp:
+        src: /tmp/aap_ssh_key.pub
+      register: ssh_pubkey
+
+    - name: Sign public key with Vault SSH CA
+      uri:
+        url: "{{ lookup('env', 'VAULT_ADDR') }}/v1/ssh/sign/{{ lookup('env', 'VAULT_SSH_ROLE') | default('aap-ssh', true) }}"
+        method: POST
+        headers:
+          X-Vault-Token: "{{ vault_token }}"
+          X-Vault-Namespace: "{{ lookup('env', 'VAULT_NAMESPACE') | default('admin', true) }}"
+        body_format: json
+        body:
+          public_key: "{{ ssh_pubkey.content | b64decode }}"
+          valid_principals: "{{ vault_ssh_user | default(ansible_user) }}"
+        validate_certs: no
+        status_code: 200
+      register: vault_ssh_cert
+      retries: 3
+      delay: 5
+      until: vault_ssh_cert.status == 200
+
+    - name: Write signed certificate to disk
+      copy:
+        content: "{{ vault_ssh_cert.json.data.signed_key }}"
+        dest: /tmp/aap_ssh_key-cert.pub
+        mode: "0600"
+
+    - name: Debug SSH setup
+      debug:
+        msg:
+          - "Vault auth: OK"
+          - "SSH cert signed for principal: {{ vault_ssh_user | default(ansible_user) }}"
+          - "Cert serial: {{ vault_ssh_cert.json.data.serial_number }}"
+
+# Play 2: Patch VMs using the signed certificate
 - name: Patch GCP Ubuntu VMs using OS Login
   hosts: all
   become: yes
-  gather_facts: yes
-  
+  gather_facts: no
+
   vars:
     apt_cache_valid_time: 3600
     reboot_timeout: 600
     patch_type: "{{ patch_type | default('security') }}"
     reboot_allowed: "{{ reboot_allowed | default(true) }}"
-  
-  tasks:
+
+  pre_tasks:
+    - name: Wait for SSH port to be available
+      wait_for:
+        host: "{{ ansible_host }}"
+        port: 22
+        timeout: 180
+        delay: 10
+      delegate_to: localhost
+      retries: 5
+      delay: 15
+      register: ssh_port_check
+      until: ssh_port_check is succeeded
+
     - name: Wait for SSH connection
       wait_for_connection:
-        connect_timeout: 10
-        timeout: 180
-        delay: 5
-        sleep: 5
-      retries: 3
-      delay: 10
+        connect_timeout: 15
+        timeout: 300
+        delay: 10
+        sleep: 10
+      retries: 5
+      delay: 15
       register: connection_result
       until: connection_result is succeeded
-      ignore_errors: yes
-    
-    - name: Fail if connection failed
-      fail:
-        msg: "Failed to connect to {{ inventory_hostname }} after multiple retries"
-      when: connection_result is failed
-    
-    - name: Display connection info
+
+    - name: Gather facts
+      setup:
+
+    - name: Debug connection info
       debug:
-        msg: "Successfully connected to {{ inventory_hostname }} ({{ ansible_host }})"
-    
+        msg:
+          - "Connected to: {{ inventory_hostname }} ({{ ansible_host }})"
+          - "OS: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+          - "Kernel: {{ ansible_kernel }}"
+
+  tasks:
     - name: Update apt cache
       apt:
         update_cache: yes
         cache_valid_time: "{{ apt_cache_valid_time }}"
-      register: apt_update_result
+      register: apt_update
       retries: 3
       delay: 10
-      until: apt_update_result is succeeded
-    
-    - name: Check available updates before patching
+      until: apt_update is succeeded
+
+    - name: Check available updates
       shell: |
-        set -o pipefail
-        echo "=== SECURITY UPDATES AVAILABLE ==="
-        apt list --upgradable 2>/dev/null | grep -i security | head -20 || echo "No security updates found"
-        echo ""
-        TOTAL=$(apt list --upgradable 2>/dev/null | grep -v "Listing..." | wc -l)
-        echo "Total updates available: $TOTAL"
-      args:
-        executable: /bin/bash
-      register: pre_patch_status
+        apt list --upgradable 2>/dev/null | grep -v "Listing..." | wc -l
+      register: update_count
       changed_when: false
-      failed_when: false
-    
-    - name: Display pre-patch status
+
+    - name: Debug pre-patch status
       debug:
-        msg: "{{ pre_patch_status.stdout_lines }}"
-    
-    - name: Upgrade all packages
+        msg: "{{ inventory_hostname }}: {{ update_count.stdout }} updates available"
+
+    - name: Apply patches
       apt:
         upgrade: dist
-        update_cache: yes
+        update_cache: no
         autoremove: yes
         autoclean: yes
       environment:
@@ -71,110 +145,46 @@
       retries: 2
       delay: 30
       until: upgrade_result is succeeded
-    
-    - name: Display upgrade summary
+
+    - name: Debug patch result
       debug:
-        msg: 
-          - "Packages upgraded: {{ upgrade_result.changed }}"
-          - "Upgrade completed successfully"
-      when: upgrade_result is succeeded
-    
-    - name: Check remaining updates
-      shell: |
-        set -o pipefail
-        REMAINING=$(apt list --upgradable 2>/dev/null | grep -v "Listing..." | wc -l)
-        echo "=== POST-PATCH STATUS ==="
-        echo "Updates remaining: $REMAINING"
-        if [ "$REMAINING" -eq 0 ]; then
-          echo "Status: FULLY PATCHED ✓"
-        else
-          echo "Status: PARTIALLY PATCHED"
-          echo "Remaining updates:"
-          apt list --upgradable 2>/dev/null | grep -v "Listing..." | head -10
-        fi
-      args:
-        executable: /bin/bash
-      register: post_patch_status
-      changed_when: false
-      failed_when: false
-    
-    - name: Display post-patch status
-      debug:
-        msg: "{{ post_patch_status.stdout_lines }}"
-    
-    - name: Check if reboot is required
+        msg: "{{ inventory_hostname }}: patching {{ 'changed packages' if upgrade_result.changed else 'no changes' }}"
+
+    - name: Check if reboot required
       stat:
         path: /var/run/reboot-required
       register: reboot_required
-    
-    - name: Display reboot status
-      debug:
-        msg: "{{ 'Reboot required: YES - System will reboot' if reboot_required.stat.exists else 'Reboot required: NO' }}"
-    
-    - name: Check which packages require reboot
-      shell: cat /var/run/reboot-required.pkgs 2>/dev/null || echo "No package list available"
-      register: reboot_packages
-      changed_when: false
-      when: reboot_required.stat.exists
-    
-    - name: Display packages requiring reboot
-      debug:
-        msg: "{{ reboot_packages.stdout_lines }}"
-      when: reboot_required.stat.exists
-    
-    - name: Reboot system if required and allowed
+
+    - name: Reboot if required and allowed
       reboot:
-        msg: "Reboot initiated by Ansible for kernel/system updates"
+        msg: "Reboot by Ansible patching"
         reboot_timeout: "{{ reboot_timeout }}"
         pre_reboot_delay: 5
         post_reboot_delay: 30
         test_command: uptime
-      when: 
+      when:
         - reboot_required.stat.exists
         - reboot_allowed | bool
       register: reboot_result
-    
-    - name: Verify system after reboot
-      debug:
-        msg: "System rebooted successfully and is back online"
-      when: 
-        - reboot_required.stat.exists
-        - reboot_result is defined
-        - reboot_result.rebooted
-    
-    - name: Skip reboot notification
-      debug:
-        msg: "Reboot required but skipped (reboot_allowed=false)"
-      when: 
-        - reboot_required.stat.exists
-        - not (reboot_allowed | bool)
-    
-    - name: Gather final system facts
-      setup:
-      when: reboot_result is defined and reboot_result.rebooted
-    
-    - name: Display final system info
-      debug:
-        msg:
-          - "Hostname: {{ ansible_hostname }}"
-          - "OS: {{ ansible_distribution }} {{ ansible_distribution_version }}"
-          - "Kernel: {{ ansible_kernel }}"
-          - "Uptime: {{ ansible_uptime_seconds | int // 3600 }} hours"
-      when: reboot_result is defined and reboot_result.rebooted
 
-- name: Generate patching summary report
+    - name: Debug reboot status
+      debug:
+        msg: >-
+          {{ inventory_hostname }}: {{
+            'rebooted successfully' if (reboot_result is defined and reboot_result.rebooted)
+            else ('reboot required but skipped' if reboot_required.stat.exists
+            else 'no reboot needed') }}
+
+# Play 3: Summary
+- name: Patching summary
   hosts: localhost
   gather_facts: no
-  
+
   tasks:
-    - name: Create summary report
+    - name: Summary report
       debug:
         msg:
-          - "=== PATCHING SUMMARY ==="
+          - "=== PATCHING COMPLETE ==="
           - "Environment: {{ environment | default('unknown') }}"
-          - "Patch Type: {{ patch_type | default('security') }}"
-          - "Total VMs: {{ groups['all'] | length }}"
-          - "Successful: {{ groups['all'] | length }}"
-          - "Failed: 0"
-          - "Reboots: {{ groups['all'] | select('match', '.*') | list | length if reboot_allowed | default(true) else 0 }}"
-          - "=== END SUMMARY ==="
+          - "Patch type: {{ patch_type | default('security') }}"
+          - "VMs targeted: {{ groups['all'] | length }}"
