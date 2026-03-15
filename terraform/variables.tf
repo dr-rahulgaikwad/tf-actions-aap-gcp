@@ -105,22 +105,13 @@ variable "aap_hostname" {
 }
 
 variable "aap_job_template_id" {
-  description = "AAP job template ID for VM patching"
+  description = "AAP job template ID for VM patching (set after creating job template in AAP)"
   type        = number
+  default     = 0
 
   validation {
-    condition     = var.aap_job_template_id > 0
-    error_message = "Job template ID must be a positive number."
-  }
-}
-
-variable "ansible_user" {
-  description = "OS Login username for Ansible SSH access (e.g., your_email_domain_com). Get this from 'gcloud compute os-login describe-profile' or 'task setup-os-login'"
-  type        = string
-
-  validation {
-    condition     = can(regex("^[a-z][a-z0-9_]*$", var.ansible_user))
-    error_message = "Ansible user must be in OS Login format: start with a letter and contain only lowercase letters, numbers, and underscores (e.g., 'rahul_gaikwad_hashicorp_com'). Get your OS Login username with: gcloud compute os-login describe-profile --format='value(posixAccounts[0].username)'"
+    condition     = var.aap_job_template_id >= 0
+    error_message = "Job template ID must be a non-negative number."
   }
 }
 
@@ -190,4 +181,10 @@ variable "enable_cloud_monitoring" {
   description = "Enable Cloud Monitoring for VMs"
   type        = bool
   default     = true
+}
+
+variable "ansible_user" {
+  description = "OS Login username for Ansible SSH access (get from: gcloud compute os-login describe-profile --format='value(posixAccounts[0].username)')"
+  type        = string
+  default     = ""
 }
