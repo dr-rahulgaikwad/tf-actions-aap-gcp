@@ -89,7 +89,7 @@ Here’s how the workflow flows in practice:
 
 This architecture is event-driven and fully automated. No manual coordination, no credential hunting, no context switching.
 
-Based on the architecture combining HCP Terraform, Vault, Ansible Automation Platform, and GCP OS Login, here are the key benefits:
+Based on the architecture combining HCP Terraform, Vault, Ansible Automation Platform, and Vault SSH CA, here are the key benefits:
 
 **Security & compliance**
 
@@ -192,7 +192,6 @@ export GOOGLE_APPLICATION_CREDENTIALS="$HOME/.config/gcloud/application_default_
 gcloud services enable compute.googleapis.com \
   iam.googleapis.com \
   cloudresourcemanager.googleapis.com \
-  oslogin.googleapis.com \
   iamcredentials.googleapis.com
 ```
 
@@ -261,20 +260,31 @@ task bootstrap-apply
 
 Bootstrap creates AAP and GCP secret credentials and stored in Vault.
 
+> After bootstrap completes, copy the Vault SSH CA public key into HCP Terraform as a workspace variable:
+> ```bash
+> cd bootstrap && terraform output -raw vault_ssh_ca_public_key
+> ```
+> Add as Terraform variable `vault_ssh_ca_public_key` in HCP Terraform → Workspace → Variables. This key is written to each VM's `/etc/ssh/trusted-user-ca-keys.pem` at boot so sshd trusts Vault-signed certificates.
+
 `![][image8]`
 
 #### 5\. Create Ansible playbook
 
 The playbook ([gcp_vm_patching_demo.yml](https://github.com/dr-rahulgaikwad/tf-actions-aap-gcp/blob/main/ansible/gcp_vm_patching_demo.yml)) handles patching with production-ready error handling:
 
+**SSH authentication flow:**
+
+1. VM boots → startup script writes Vault CA to `/etc/ssh/trusted-user-ca-keys.pem` → sshd trusts it
+2. AAP job starts → Vault AppRole login → sign ephemeral ed25519 key for principal `ubuntu` (30-min TTL)
+3. SSH connects as `ubuntu` with signed cert → sshd verifies cert against trusted CA → access granted
+4. Cert expires after 30 minutes — no cleanup needed, no static keys anywhere
+
 **Key features:**
 
-* Dynamic inventory from Terraform `vm_inventory` variable  
-* Connection retry logic (3 attempts with delays)  
-* Pre-patch status reporting (shows available updates)  
-* Detailed upgrade output (lists upgraded packages)  
-* Post-patch verification (confirms patch status)  
+* Ephemeral SSH certificates via Vault SSH CA — no static keys
+* Dynamic AAP inventory — IPs always reflect current VM state
 * Automatic reboot handling (checks `/var/run/reboot-required`)
+* `apt dist-upgrade` with retry logic and DEBIAN_FRONTEND=noninteractive
 
 The playbook is verbose by design ;  when troubleshooting, you need detailed logs showing exactly what was patched.
 
@@ -282,9 +292,9 @@ The playbook is verbose by design ;  when troubleshooting, you need detailed
 
 1. In AAP, create Project:  
 * Resources → Projects → Add  
-* Name: TF GCP VM Patching  
+* Name: `GCP VM Management`  
 * SCM Type: Git  
-* SCM URL: https://github.com/your-org/tf-actions-vault-aap-gcp
+* SCM URL: https://github.com/dr-rahulgaikwad/tf-actions-aap-gcp
 
 `![][image9]`
 
@@ -340,12 +350,13 @@ extra_vars:
 ```
 
 3. Create Credential:  
-* Resources → Credentials → Add  
-* Name: `Vault SSH`  
-* Credential Type: `Vault SSH Certificate`  
-* Fill in Vault address, AppRole Role ID and Secret ID from bootstrap output (`task bootstrap-output`)  
-* SSH Role Name: `aap-ssh`  
-* SSH Username: your GCP OS Login username (`gcloud compute os-login describe-profile --format='value(posixAccounts[0].username)'`)
+
+> ✅ **Auto-managed by Terraform** — the `Vault SSH` credential is automatically created and updated on every Terraform run. AppRole credentials are read directly from Vault KV (`secret/aap/approle`) written by the bootstrap module. No manual credential setup required.
+
+If you need to verify:  
+* Resources → Credentials → `Vault SSH` — confirm all fields are populated  
+* SSH Username must be `ubuntu` (the Linux user on Ubuntu GCP VMs)  
+* To re-trigger: run `terraform apply` from HCP Terraform
 
 `![][image10]`
 
@@ -353,7 +364,7 @@ extra_vars:
 * Resources → Templates → Add  
 * Name: Patch GCP VMs  
 * Inventory: `demo-gcp-vms` ⚠️ *This is auto-created by Terraform — leave as-is for now, update after first deploy*  
-* Project: TF GCP VM Patching  
+* Project: `GCP VM Management`  
 * Playbook: `ansible/gcp_vm_patching_demo.yml`  
 * Credentials: `Vault SSH`  
 * Enable "Prompt on launch" for Variables  
@@ -477,7 +488,7 @@ You can also watch end to end demo recordings on YouTube [HERE](https://youtu.be
 
 **Expected results:**
 
-* 5 GCP VMs provisioned  
+* VMs provisioned (count controlled by `vm_count` variable, default: 2)  
 * Actions automatically triggered the AAP job  
 * All VMs patched and rebooted if needed  
 * Complete logs in HCP Terraform and AAP

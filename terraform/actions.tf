@@ -7,10 +7,16 @@ resource "aap_inventory" "vms" {
   organization = 1
 }
 
-# AAP Credential — managed via API since the AAP provider has no credential resource
-# Runs on every apply to ensure role_id, secret_id, and ssh_user are always correct
+resource "time_sleep" "wait_for_aap" {
+  depends_on      = [aap_inventory.vms]
+  create_duration = "15s"
+}
+
+# AAP Credential — auto-managed via API on every apply
+# The AAP Terraform provider has no credential resource, so we use local-exec.
+# Reads AppRole creds from Vault KV (written by bootstrap) to ensure
+# role_id, secret_id, and ssh_user are always correct without manual steps.
 resource "terraform_data" "aap_credential" {
-  # Re-run whenever AppRole creds or ansible_user changes
   input = {
     vault_addr   = var.vault_addr
     ansible_user = var.ansible_user
@@ -27,17 +33,15 @@ resource "terraform_data" "aap_credential" {
       AAP_USER="${data.vault_kv_secret_v2.aap_creds.data["username"]}"
       AAP_PASS="${data.vault_kv_secret_v2.aap_creds.data["password"]}"
 
-      # Get credential type ID for "Vault SSH Certificate"
       CRED_TYPE_ID=$(curl -sk -u "$AAP_USER:$AAP_PASS" \
         "$AAP_HOST/api/controller/v2/credential_types/?name=Vault+SSH+Certificate" \
         | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['results'][0]['id'])" 2>/dev/null)
 
       if [ -z "$CRED_TYPE_ID" ]; then
-        echo "WARNING: Vault SSH Certificate credential type not found in AAP — create it manually first"
+        echo "WARNING: Vault SSH Certificate credential type not found in AAP — create it manually (Step 4.1)"
         exit 0
       fi
 
-      # Check if credential exists
       CRED_ID=$(curl -sk -u "$AAP_USER:$AAP_PASS" \
         "$AAP_HOST/api/controller/v2/credentials/?name=Vault+SSH" \
         | python3 -c "import sys,json; d=json.load(sys.stdin); r=d.get('results',[]); print(r[0]['id'] if r else '')" 2>/dev/null)
@@ -76,20 +80,17 @@ print(json.dumps({
 
   depends_on = [time_sleep.wait_for_aap]
 }
+
+# Gate: tracks VM readiness without any AAP dependency
+# VM create/destroy is fully independent of AAP availability
+resource "terraform_data" "vms_ready" {
   input = {
     vm_ids = [for vm in google_compute_instance.ubuntu_vms : vm.id]
   }
   depends_on = [time_sleep.wait_for_vms]
 }
 
-resource "time_sleep" "wait_for_aap" {
-  depends_on      = [aap_inventory.vms, terraform_data.vms_ready]
-  create_duration = "15s"
-}
-
-# Register VMs in AAP Inventory
-# depends_on terraform_data.vms_ready (not directly on GCP resources)
-# so VM create/destroy is fully independent of AAP availability
+# Register VMs in AAP Inventory — IPs always reflect current VM state (no ignore_changes)
 resource "aap_host" "vms" {
   for_each = { for vm in google_compute_instance.ubuntu_vms : vm.name => vm }
 
@@ -103,18 +104,17 @@ resource "aap_host" "vms" {
     environment  = var.environment
   })
 
-  depends_on = [time_sleep.wait_for_aap]
+  depends_on = [
+    time_sleep.wait_for_aap,
+    terraform_data.vms_ready
+  ]
 
   lifecycle {
     create_before_destroy = false
-    # No ignore_changes — variables (ansible_host IP) must always reflect current VM state
   }
 }
 
-# VM Inventory for AAP Playbook
-# Structured inventory passed to Ansible via extra_vars
 locals {
-  # VM inventory for AAP Playbook
   vm_inventory = {
     all = {
       hosts = {
@@ -134,7 +134,6 @@ locals {
     }
   }
 
-  # Extra variables passed to AAP job template
   extra_vars = {
     patch_type          = "security"
     reboot_allowed      = true
@@ -144,45 +143,28 @@ locals {
     gcp_zone            = var.gcp_zone
     terraform_workspace = terraform.workspace
     triggered_by        = "terraform-actions"
-    # NOTE: Do NOT use timestamp() here — it changes every plan and causes
-    # the action to fire on every run, crashing the sandbox AAP instance.
+    # Do NOT add timestamp() — changes every plan, fires action on every run
   }
 }
 
-# Terraform Action - AAP Job Launch
-# Automatically triggers AAP job after VM creation/update
-# Waits for job completion before marking Terraform run as successful
 action "aap_job_launch" "patch_vms" {
   config {
-    # AAP job template ID (must be created manually in AAP)
-    job_template_id = var.aap_job_template_id
-
-    # Use Terraform-managed inventory
-    inventory_id = aap_inventory.vms.id
-
-    # Wait for job completion
-    wait_for_completion = true
-
-    # Timeout: 30 minutes (1800 seconds)
-    # Adjust based on VM count and patching requirements
+    job_template_id                     = var.aap_job_template_id
+    inventory_id                        = aap_inventory.vms.id
+    wait_for_completion                 = true
     wait_for_completion_timeout_seconds = 1800
-
-    # Pass variables to Ansible playbook
-    extra_vars = jsonencode(local.extra_vars)
+    extra_vars                          = jsonencode(local.extra_vars)
   }
 }
 
-# Trigger Resource - Executes Action on Infrastructure Changes
-# Only triggers when aap_job_template_id is set (> 0)
+# Only triggers when aap_job_template_id > 0 and VM state changes
 resource "terraform_data" "trigger_patch" {
   count = var.aap_job_template_id > 0 ? 1 : 0
 
   input = {
-    vm_count        = length(google_compute_instance.ubuntu_vms)
-    vm_names        = [for vm in google_compute_instance.ubuntu_vms : vm.name]
-    vm_ids          = [for vm in google_compute_instance.ubuntu_vms : vm.id]
-    ready_timestamp = time_sleep.wait_for_vms.id
-    environment     = var.environment
+    vm_count    = length(google_compute_instance.ubuntu_vms)
+    vm_ids      = [for vm in google_compute_instance.ubuntu_vms : vm.id]
+    environment = var.environment
   }
 
   lifecycle {
@@ -199,9 +181,8 @@ resource "terraform_data" "trigger_patch" {
   ]
 }
 
-# Output - Action Status
 output "action_patch_vms_ready" {
-  description = "Terraform Actions patch job status and configuration"
+  description = "Terraform Actions patch job status"
   value = {
     ready           = length(google_compute_instance.ubuntu_vms) > 0
     vm_count        = length(google_compute_instance.ubuntu_vms)
@@ -212,21 +193,8 @@ output "action_patch_vms_ready" {
   }
 }
 
-# Output - VM Inventory
 output "action_patch_vms_inventory" {
-  description = "VM inventory structure passed to AAP for patching"
+  description = "VM inventory passed to AAP"
   value       = local.vm_inventory
   sensitive   = false
-}
-
-# Output - Extra Variables
-output "action_extra_vars" {
-  description = "Extra variables passed to AAP job template"
-  value = {
-    patch_type     = local.extra_vars.patch_type
-    reboot_allowed = local.extra_vars.reboot_allowed
-    environment    = local.extra_vars.environment
-    vm_count       = length(google_compute_instance.ubuntu_vms)
-  }
-  sensitive = false
 }
