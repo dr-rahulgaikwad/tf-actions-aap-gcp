@@ -6,6 +6,23 @@
 # - Vault creds passed via extra_vars (no AAP credential config needed)
 # - wait_for_completion=false (doesn't block apply, avoids sandbox timeouts)
 
+# Remove stale resources from remote state — these were deleted from config
+# but still exist in HCP TF state, causing refresh calls that crash sandbox AAP
+removed {
+  from = aap_host.vms
+  lifecycle { destroy = false }
+}
+
+removed {
+  from = aap_inventory.vms
+  lifecycle { destroy = false }
+}
+
+removed {
+  from = time_sleep.wait_for_aap
+  lifecycle { destroy = false }
+}
+
 data "vault_kv_secret_v2" "aap_approle" {
   mount = "secret"
   name  = "aap/approle"
