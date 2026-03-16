@@ -27,13 +27,3 @@ output "workload_identity_provider_name" {
   description = "Workload Identity Provider full resource name"
   value       = google_iam_workload_identity_pool_provider.aap_provider.name
 }
-
-output "aap_inventory_id" {
-  description = "AAP inventory ID for VM management"
-  value       = aap_inventory.vms.id
-}
-
-output "aap_inventory_name" {
-  description = "AAP inventory name"
-  value       = aap_inventory.vms.name
-}
