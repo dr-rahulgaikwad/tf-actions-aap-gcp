@@ -33,8 +33,10 @@ resource "aap_host" "vms" {
   ]
 
   lifecycle {
-    # Force recreation when VMs change — avoids stale host IDs causing 502 on refresh
-    replace_triggered_by = [google_compute_instance.ubuntu_vms]
+    # Only recreate if the host's own VM instance changes (by ID)
+    # Do NOT use replace_triggered_by on the whole list — that recreates
+    # all hosts simultaneously and floods AAP with concurrent API calls
+    create_before_destroy = false
   }
 }
 
@@ -62,24 +64,17 @@ locals {
   }
 
   # Extra variables passed to AAP job template
-  # These variables are available in the Ansible playbook
   extra_vars = {
-    # Patching configuration
-    patch_type     = "security"
-    reboot_allowed = true
-    environment    = var.environment
-
-    # VM inventory
-    vm_inventory = local.vm_inventory
-
-    # GCP configuration
-    gcp_project_id = var.gcp_project_id
-    gcp_zone       = var.gcp_zone
-
-    # Metadata
+    patch_type          = "security"
+    reboot_allowed      = true
+    environment         = var.environment
+    vm_inventory        = local.vm_inventory
+    gcp_project_id      = var.gcp_project_id
+    gcp_zone            = var.gcp_zone
     terraform_workspace = terraform.workspace
     triggered_by        = "terraform-actions"
-    timestamp           = timestamp()
+    # NOTE: Do NOT use timestamp() here — it changes every plan and causes
+    # the action to fire on every run, crashing the sandbox AAP instance.
   }
 }
 
