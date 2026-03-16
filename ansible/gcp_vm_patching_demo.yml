@@ -79,9 +79,19 @@
           - "SSH cert signed for principal: {{ vault_ssh_user | default(ansible_user) }}"
           - "Cert serial: {{ vault_ssh_cert.json.data.serial_number }}"
 
+    # Build dynamic inventory from vm_hosts extra_var passed by Terraform
+    # This replaces aap_host Terraform resources which caused parallel AAP refresh crashes
+    - name: Add VMs to dynamic inventory
+      add_host:
+        name: "{{ item.key }}"
+        groups: gcp_vms
+        ansible_host: "{{ item.value }}"
+      loop: "{{ vm_hosts | dict2items }}"
+      when: vm_hosts is defined
+
 # Play 2: Patch VMs using the Vault-signed certificate
 - name: Patch GCP Ubuntu VMs
-  hosts: all
+  hosts: gcp_vms
   become: yes
   become_method: sudo
   gather_facts: no
@@ -188,4 +198,4 @@
           - "=== PATCHING COMPLETE ==="
           - "Environment: {{ environment | default('unknown') }}"
           - "Patch type: {{ patch_type | default('security') }}"
-          - "VMs targeted: {{ groups['all'] | length }}"
+          - "VMs targeted: {{ groups['gcp_vms'] | default([]) | length }}"
