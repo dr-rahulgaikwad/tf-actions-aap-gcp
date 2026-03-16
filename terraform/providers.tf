@@ -67,12 +67,6 @@ data "vault_kv_secret_v2" "aap_creds" {
   name  = "aap/credentials"
 }
 
-# AppRole credentials for AAP Vault SSH credential (stored by bootstrap)
-data "vault_kv_secret_v2" "aap_approle" {
-  mount = "secret"
-  name  = "aap/approle"
-}
-
 # Ansible Automation Platform Provider - Dynamic Credentials
 provider "aap" {
   host                 = data.vault_kv_secret_v2.aap_creds.data["hostname"]
