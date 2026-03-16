@@ -57,7 +57,7 @@ variable "vm_machine_type" {
 variable "ubuntu_image" {
   description = "Ubuntu OS image for VMs"
   type        = string
-  default     = "projects/ubuntu-os-cloud/global/images/family/ubuntu-2204-lts"
+  default     = "projects/ubuntu-os-cloud/global/images/ubuntu-2004-focal-v20231101"
 
   validation {
     condition     = can(regex("ubuntu", var.ubuntu_image))

@@ -154,7 +154,11 @@
 
     - name: Debug patch result
       debug:
-        msg: "{{ inventory_hostname }}: {{ 'changed' if upgrade_result.changed else 'no changes' }}"
+        msg: >-
+          {{ inventory_hostname }}: {{ 'changed' if upgrade_result.changed else 'no changes' }}
+          {% if upgrade_result.changed %}
+          | Packages upgraded: {{ upgrade_result.stdout | regex_findall('Unpacking ([^ ]+)') | join(', ') }}
+          {% endif %}
 
     - name: Check if reboot required
       stat:
