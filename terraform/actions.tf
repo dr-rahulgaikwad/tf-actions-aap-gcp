@@ -7,14 +7,28 @@ resource "aap_inventory" "vms" {
   organization = 1
 }
 
+# Gate: only proceed to AAP host registration after VMs AND inventory are ready
+# This resource has no AAP dependency — it just tracks VM readiness
+resource "terraform_data" "vms_ready" {
+  input = {
+    vm_ids = [for vm in google_compute_instance.ubuntu_vms : vm.id]
+  }
+  depends_on = [
+    time_sleep.wait_for_vms,
+    google_compute_instance_iam_member.ansible_oslogin_admin
+  ]
+}
+
 resource "time_sleep" "wait_for_aap" {
-  depends_on      = [aap_inventory.vms]
-  create_duration = "30s"
+  depends_on      = [aap_inventory.vms, terraform_data.vms_ready]
+  create_duration = "15s"
 }
 
 # Register VMs in AAP Inventory
+# depends_on terraform_data.vms_ready (not directly on GCP resources)
+# so VM create/destroy is fully independent of AAP availability
 resource "aap_host" "vms" {
-  for_each = { for idx, vm in google_compute_instance.ubuntu_vms : vm.name => vm }
+  for_each = { for vm in google_compute_instance.ubuntu_vms : vm.name => vm }
 
   name         = each.value.name
   inventory_id = aap_inventory.vms.id
@@ -26,17 +40,12 @@ resource "aap_host" "vms" {
     environment  = var.environment
   })
 
-  depends_on = [
-    time_sleep.wait_for_aap,
-    google_compute_instance.ubuntu_vms,
-    google_compute_instance_iam_member.ansible_oslogin_admin
-  ]
+  depends_on = [time_sleep.wait_for_aap]
 
   lifecycle {
-    # Only recreate if the host's own VM instance changes (by ID)
-    # Do NOT use replace_triggered_by on the whole list — that recreates
-    # all hosts simultaneously and floods AAP with concurrent API calls
     create_before_destroy = false
+    # Ignore AAP-side changes (e.g. manual edits in AAP UI)
+    ignore_changes = [variables]
   }
 }
 
