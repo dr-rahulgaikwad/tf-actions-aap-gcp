@@ -171,6 +171,12 @@ variable "ansible_user" {
   default     = "ubuntu"
 }
 
+variable "aap_insecure_skip_verify" {
+  description = "Skip TLS verification for AAP provider. Set false in production (requires valid TLS cert on AAP)."
+  type        = bool
+  default     = false
+}
+
 variable "vault_ssh_ca_public_key" {
   description = "Vault SSH CA public key written to VM sshd TrustedUserCAKeys at boot (from: cd bootstrap && terraform output -raw vault_ssh_ca_public_key)"
   type        = string

@@ -1,55 +1,51 @@
 # Terraform Actions + AAP + GCP VM Patching
 
-**Production-ready automated VM patching with zero static credentials.**
+Production-ready automated VM patching with zero static credentials. A git push provisions GCP VMs, configures SSH trust via Vault CA, and automatically triggers Ansible patching — no keys, no secrets in code, no manual steps.
 
-[![Security](https://img.shields.io/badge/Security-10%2F10-brightgreen)]()
-[![Credentials](https://img.shields.io/badge/Static%20Credentials-0-brightgreen)]()
-[![Automation](https://img.shields.io/badge/Automation-Full-blue)]()
-
----
-
-## SSH Authentication Architecture
-
-This project uses **Vault SSH CA** (not GCP OS Login) for SSH authentication:
-
-- VMs boot with `enable-oslogin=FALSE`
-- A startup script writes the Vault CA public key to `/etc/ssh/trusted-user-ca-keys.pem` and configures `sshd` to trust it
-- AAP generates an ephemeral keypair per job run, signs it with Vault (30-min TTL), and SSHs using the signed certificate
-- No static SSH keys anywhere
-
-> This is the same pattern used by [GlennChia/terraform-actions-ansible-job-vault-ssh-vm-config](https://github.com/GlennChia/terraform-actions-ansible-job-vault-ssh-vm-config) — baking the CA into the image via Packer — but done at boot via GCP startup script instead.
+[![Security](https://img.shields.io/badge/Static%20Credentials-Zero-brightgreen)]()
+[![Automation](https://img.shields.io/badge/Deployment-60%20min-blue)]()
+[![Version](https://img.shields.io/badge/Version-3.0.0-orange)]()
 
 ---
 
-## 🚀 Deployment Guide (<60 Minutes)
+## How it works
 
-### Prerequisites
+```
+git push → HCP Terraform → Vault JWT auth → GCP dynamic token → provision VMs
+                                          → AAP credentials  → trigger patching job
+                                                               → Vault SSH CA cert → SSH → patch
+```
+
+Every credential is dynamically generated with a short TTL. Nothing is stored in code or state.
+
+| Credential | Source | TTL |
+|---|---|---|
+| GCP access token | Vault GCP secrets engine | 1 hour |
+| AAP credentials | Vault KV | stored, rotated manually |
+| SSH certificate | Vault SSH CA | 30 min |
+| Vault token (TFC) | JWT auth | 20 min |
+
+---
+
+## Prerequisites
 
 | Requirement | Notes |
-|-------------|-------|
-| GCP Project with billing enabled | [Create project](https://console.cloud.google.com/projectcreate) |
+|---|---|
+| GCP project with billing | [Create project](https://console.cloud.google.com/projectcreate) |
 | HCP Vault Dedicated cluster | [Free trial](https://portal.cloud.hashicorp.com/sign-up) |
 | HCP Terraform workspace | [Free tier](https://app.terraform.io/signup) |
 | Ansible Automation Platform 2.6+ | [Trial](https://www.redhat.com/en/products/trials#ansible) |
-| `gcloud`, `vault`, `terraform`, `task` CLIs | See install commands below |
-
-```bash
-# macOS
-brew install google-cloud-sdk vault terraform go-task
-
-# Linux
-curl https://sdk.cloud.google.com | bash
-sudo apt-get install vault terraform  # after adding HashiCorp apt repo
-```
+| `gcloud`, `vault`, `task` CLIs | `brew install google-cloud-sdk vault go-task` |
 
 ---
 
-### Step 1: Authenticate & Enable GCP APIs (5 min)
+## Deployment (~60 min)
+
+### Step 1 — GCP setup (5 min)
 
 ```bash
 gcloud auth login
 gcloud config set project YOUR_PROJECT_ID
-export GOOGLE_APPLICATION_CREDENTIALS="$HOME/.config/gcloud/application_default_credentials.json"
 
 gcloud services enable compute.googleapis.com \
   iam.googleapis.com \
@@ -57,11 +53,9 @@ gcloud services enable compute.googleapis.com \
   iamcredentials.googleapis.com
 ```
 
-> The bootstrap module automatically creates the `vault-admin` service account with least-privilege IAM roles and configures Vault's GCP secrets engine. No manual service account setup required.
+### Step 2 — Bootstrap (15 min)
 
----
-
-### Step 2: Bootstrap — Automates All Vault + GCP + TFC Setup (15 min)
+The bootstrap module automates all Vault, GCP, and HCP Terraform configuration.
 
 ```bash
 git clone https://github.com/dr-rahulgaikwad/tf-actions-aap-gcp.git
@@ -73,11 +67,10 @@ vault login
 
 export TFE_TOKEN="your-tfc-token"
 
-cd bootstrap
-cp terraform.tfvars.example terraform.tfvars
+task bootstrap
 ```
 
-Edit `bootstrap/terraform.tfvars`:
+Edit `bootstrap/terraform.tfvars` when prompted:
 
 ```hcl
 gcp_project_id     = "your-project-id"
@@ -89,31 +82,20 @@ tfc_organization   = "your-tfc-org"
 tfc_workspace_name = "tf-actions-vault-aap-gcp"
 ```
 
-```bash
-terraform init
-terraform apply
+Bootstrap creates automatically:
+- Vault JWT auth for HCP Terraform (20-min TTL)
+- Vault GCP secrets engine with dynamic tokens (1-hour TTL)
+- Vault SSH CA for ephemeral certificates (30-min TTL)
+- AppRole for AAP authentication (10-hour TTL)
+- All HCP Terraform workspace variables
 
-# Save AppRole credentials for AAP setup
-terraform output -json approle_credentials > /tmp/approle.json
-```
-
-**Bootstrap creates automatically:**
-- ✅ Vault JWT auth for HCP Terraform (20-min TTL)
-- ✅ Vault GCP secrets engine with dynamic tokens (1-hour TTL)
-- ✅ Vault SSH CA for ephemeral certificates (30-min TTL)
-- ✅ AppRole for AAP authentication (10-hour TTL)
-- ✅ All HCP Terraform workspace variables configured
-
----
-
-### Step 3: Set Vault SSH CA in HCP Terraform (2 min)
+### Step 3 — Set Vault SSH CA in HCP Terraform (2 min)
 
 ```bash
-# Still in bootstrap/ directory
-terraform output -raw vault_ssh_ca_public_key
+task add-ssh-ca
 ```
 
-Copy the output and add it as a Terraform variable in HCP Terraform:
+Copy the printed key and add it as a Terraform variable in HCP Terraform:
 
 ```
 HCP Terraform → Workspace → Variables → Terraform Variables → Add
@@ -121,24 +103,19 @@ Key:   vault_ssh_ca_public_key
 Value: ssh-rsa AAAA... (paste full key)
 ```
 
-This key is written to each VM's `/etc/ssh/trusted-user-ca-keys.pem` at boot via startup script, so sshd trusts Vault-signed certificates.
+This key is written to each VM's `/etc/ssh/trusted-user-ca-keys.pem` at boot so sshd trusts Vault-signed certificates.
 
-```bash
-cd ..
-```
+### Step 4 — Configure AAP (20 min)
 
----
+Run `task setup-aap` for the full interactive guide. Summary:
 
-### Step 4: Configure AAP (20 min)
+**4.1 — Custom Credential Type**
 
-**4.1 — Create Custom Credential Type**
+AAP UI → Administration → Credential Types → Add → Name: `Vault SSH Certificate`
 
-- AAP UI → Administration → Credential Types → Add
-- Name: `Vault SSH Certificate`
+> AAP has two separate fields. Paste each section separately from `scripts/aap-vault-ssh-credential.json`.
 
-> ⚠️ AAP has **two separate fields**. Do NOT paste the whole file — paste each section separately.
-
-**Input Configuration** field — paste this:
+**Input Configuration:**
 ```yaml
 fields:
   - id: vault_addr
@@ -170,7 +147,7 @@ required:
   - ssh_user
 ```
 
-**Injector Configuration** field — paste this:
+**Injector Configuration:**
 ```yaml
 env:
   VAULT_ADDR: '{{ vault_addr }}'
@@ -183,588 +160,225 @@ extra_vars:
   vault_ssh_user: '{{ ssh_user }}'
 ```
 
-- Save
-
 **4.2 — Create Credential**
 
-- AAP UI → Resources → Credentials → Add
-- Name: `Vault SSH`
+AAP UI → Resources → Credentials → Add
 - Credential Type: `Vault SSH Certificate`
-- Vault Address: `https://your-vault.vault.hashicorp.cloud:8200`
-- Vault Namespace: `admin`
-- AppRole Role ID: (from `cd bootstrap && terraform output -json approle_credentials`)
-- AppRole Secret ID: (from `cd bootstrap && terraform output -json approle_credentials`)
-- SSH Role Name: `aap-ssh`
+- Vault Address: your Vault URL
+- AppRole creds: `task bootstrap-output`
 - SSH Username: `ubuntu`
-- Save
 
-> ⚠️ **SSH Username must be `ubuntu`** — this is the principal the Vault SSH cert is signed for. If it doesn't match the Linux user on the VM, SSH fails with `Permission denied (publickey)`.
+> SSH Username must be `ubuntu` — this is the principal the Vault SSH cert is signed for.
 
 **4.3 — Create Project**
 
-- AAP UI → Resources → Projects → Add
-- Name: `GCP VM Management`
-- SCM Type: `Git`
+AAP UI → Resources → Projects → Add
+- SCM Type: Git
 - SCM URL: `https://github.com/dr-rahulgaikwad/tf-actions-aap-gcp`
-- Save & Sync (wait for green status)
 
 **4.4 — Create Job Template**
 
-- AAP UI → Resources → Templates → Add Job Template
+AAP UI → Resources → Templates → Add Job Template
 - Name: `Patch GCP VMs`
-- Inventory: `demo-gcp-vms` ⚠️ *Auto-created by Terraform — leave as-is for now*
-- Project: `GCP VM Management`
+- Inventory: `demo-gcp-vms` (auto-created by Terraform)
 - Playbook: `ansible/gcp_vm_patching_demo.yml`
-- Credentials: `Vault SSH`
-- Variables: Enable "Prompt on launch"
-- Save
-- **Note the Template ID from the URL:** `/templates/job_template/<ID>/`
+- Credentials: `Vault SSH Certificate`
+- Variables: enable Prompt on launch
+- Note the Template ID from the URL
 
-**4.5 — Set Remaining Variables in HCP Terraform**
+**4.5 — Set remaining HCP Terraform variables**
 
-**Terraform Variables** (HCP Terraform → Workspace → Variables → Terraform):
+| Variable | How to set |
+|---|---|
+| `vault_ssh_ca_public_key` | Step 3 above |
+| `ansible_user` | `ubuntu` |
+| `aap_job_template_id` | Template ID from step 4.4 |
+| `aap_oidc_issuer_url` | Your AAP server URL |
+| `aap_oidc_repository` | `your-org/tf-actions-aap-gcp` |
+| `aap_server_ip` | AAP server public IP (production) |
+| `aap_insecure_skip_verify` | `true` for demo, `false` for production |
 
-| Variable | Value | Set by Bootstrap? |
-|----------|-------|:-----------------:|
-| `vault_addr` | `https://your-vault.vault.hashicorp.cloud:8200` | ✅ Auto |
-| `vault_namespace` | `admin` | ✅ Auto |
-| `vault_gcp_roleset` | `terraform-provisioner` | ✅ Default |
-| `gcp_project_id` | `your-project-id` | ✅ Auto |
-| `gcp_region` | `us-central1` | ✅ Auto |
-| `gcp_zone` | `us-central1-a` | ✅ Auto |
-| `aap_hostname` | `https://your-aap-server` | ✅ Auto |
-| `environment` | `demo` | ✅ Auto — **update to `production`** |
-| `vm_count` | `2` | ✅ Auto |
-| `vault_ssh_ca_public_key` | (from Step 3) | ⚠️ **Set manually in Step 3** |
-| `ansible_user` | `ubuntu` | ⚠️ **Set manually** |
-| `aap_job_template_id` | `<ID from step 4.4>` | ⚠️ **Set manually after step 4.4** |
-| `aap_oidc_issuer_url` | `https://your-aap-server` | ⚠️ **Set manually** |
-| `aap_oidc_repository` | `your-org/tf-actions-aap-gcp` | ⚠️ **Set manually** |
-| `aap_server_ip` | Your AAP server's public IP | ⚠️ **Required for production** |
+All other variables are auto-set by bootstrap.
 
-**Environment Variables** (HCP Terraform → Workspace → Variables → Environment):
-
-| Variable | Value | Set by Bootstrap? |
-|----------|-------|:-----------------:|
-| `TFC_VAULT_PROVIDER_AUTH` | `true` | ✅ Auto |
-| `TFC_VAULT_BACKED_JWT_AUTH` | `true` | ✅ Auto |
-| `TFC_VAULT_ADDR` | `https://your-vault.vault.hashicorp.cloud:8200` | ✅ Auto |
-| `TFC_VAULT_NAMESPACE` | `admin` | ✅ Auto |
-| `TFC_VAULT_RUN_ROLE` | `terraform-cloud` | ✅ Auto |
-
-> ⚠️ Do NOT set `AAP_INSECURE_SKIP_VERIFY` in production. Only use it if your AAP has a self-signed cert during testing.
-
----
-
-### Step 5: Deploy Infrastructure (10 min)
+### Step 5 — Deploy (10 min)
 
 ```bash
-git add .
-git commit -m "Production deployment"
 git push origin main
 ```
 
-Monitor the run in HCP Terraform UI. After `apply` completes:
+Monitor the run in HCP Terraform. After apply:
 - VMs are created with Vault SSH CA trusted in sshd
-- AAP inventory `demo-gcp-vms` is auto-populated
 - Terraform Actions automatically triggers the AAP patching job
+- Patch summary report is printed in AAP job output
 
----
-
-### Step 6: Verify (5 min)
+### Step 6 — Verify (5 min)
 
 ```bash
-# Test Vault connectivity and credentials
-task test-vault
-
-# Confirm VMs are running
-task test-vms
-
-# Check AAP job completed successfully in AAP UI
-# Resources → Jobs → most recent job
+task test-vault   # Vault connectivity and credentials
+task test-vms     # VMs running in GCP
 ```
 
-**Done.** VMs are patched with zero static credentials.
+Check AAP UI → Resources → Jobs for the patch run and summary report.
 
 ---
 
-## 🔒 Security Architecture
+## Patch Summary Report
 
-### Zero Static Credentials
-✅ No credentials in code  
-✅ No credentials in Terraform state  
-✅ No static SSH keys  
-✅ No service account keys in AAP  
-✅ All credentials auto-rotate  
-✅ Vault SSH CA with 30-min TTL
+Each patching run produces a per-host report and an overall summary in the AAP job output:
 
-### Audit Trail
-- Vault audit logs: All token generation and SSH certificate signing
-- GCP Cloud Audit Logs: All API calls
-- AAP job logs: All playbook execution
-- OS Login logs: All SSH sessions
+```
+[ubuntu-vm-1] (34.31.144.26) | Patched: True | Packages: 52 | Reboot required: True
+  libssl1.1, systemd, libc6, libpam0g, libgnutls30, ...
 
-### Production Hardening
+[ubuntu-vm-2] (34.31.144.27) | Patched: True | Packages: 48 | Reboot required: False
+  libssl1.1, systemd, libc6, ...
+
+========================================
+         PATCH SUMMARY REPORT
+========================================
+Environment  : demo
+Patch type   : security
+Total VMs    : 2
+VMs patched  : 2
+VMs unchanged: 0
+Reboots needed: 1
+Total packages upgraded: 100
+========================================
+```
+
+---
+
+## Task commands
+
+```bash
+task bootstrap        # One-time setup: Vault + GCP + HCP Terraform
+task bootstrap-output # Show bootstrap outputs (AppRole creds, SSH CA, next steps)
+task add-ssh-ca       # Print Vault SSH CA key to set in HCP Terraform
+task setup-aap        # Print AAP setup guide
+
+task validate         # Validate tools, GCP auth, Vault auth, Terraform config
+task deploy           # git add/commit/push to trigger a run
+
+task test             # Run all post-deployment tests
+task test-vault       # Test Vault GCP token and AAP credential access
+task test-vms         # List running GCP VMs
+
+task clean            # Remove local Terraform cache and temp files
+```
+
+---
+
+## Security
+
+**Zero static credentials**
+- No credentials in code or Terraform state
+- No static SSH keys
+- No service account keys in AAP
+- All credentials dynamically generated with TTL enforcement
+
+**Production hardening**
+
 ```hcl
-# Set in Terraform variables
-environment = "production"
-aap_server_ip = "1.2.3.4"  # Restrict firewall to AAP IP
-
-# Remove in HCP Terraform (enable TLS verification)
-AAP_INSECURE_SKIP_VERIFY
+# terraform.tfvars
+environment              = "production"
+aap_server_ip            = "1.2.3.4"   # Restricts SSH firewall to AAP IP only
+aap_insecure_skip_verify = false        # Requires valid TLS cert on AAP
 ```
+
+Remove `AAP_INSECURE_SKIP_VERIFY` from HCP Terraform environment variables in production.
+
+**Audit trail**
+- Vault audit logs: all token generation and SSH certificate signing
+- GCP Cloud Audit Logs: all API calls
+- AAP job logs: all playbook execution with patch summary
 
 ---
 
-## 🛠️ Troubleshooting
+## Troubleshooting
 
-### Vault JWT Auth Fails
+**Vault JWT auth fails**
 ```bash
-# Check environment variables in HCP Terraform
-TFC_VAULT_BACKED_JWT_AUTH=true
-TFC_VAULT_PROVIDER_AUTH=true
-
-# Verify JWT role
 vault read auth/jwt/role/terraform-cloud
+# Check TFC_VAULT_BACKED_JWT_AUTH=true and TFC_VAULT_PROVIDER_AUTH=true in HCP TF workspace
 ```
 
-### GCP Token Generation Fails
+**GCP token generation fails**
 ```bash
-# Test token generation
 vault read gcp/token/terraform-provisioner
-
-# Check service account permissions
-gcloud projects get-iam-policy PROJECT_ID
+gcloud projects get-iam-policy PROJECT_ID  # Check vault-admin SA permissions
 ```
 
-### Vault SSH CA Fails
+**SSH connection fails**
 ```bash
-# Test AppRole authentication
-vault write auth/approle/login role_id=<role_id> secret_id=<secret_id>
+# Verify Vault SSH CA is in sshd config on the VM
+gcloud compute ssh VM_NAME --command="cat /etc/ssh/sshd_config | grep TrustedUserCAKeys"
 
-# Test SSH certificate signing
-vault write ssh/sign/aap-ssh public_key=@~/.ssh/id_rsa.pub
+# Test AppRole auth manually
+vault write auth/approle/login role_id=ROLE_ID secret_id=SECRET_ID
 
-# Verify CA is added to GCP
-gcloud compute os-login ssh-keys list
+# Test cert signing
+vault write ssh/sign/aap-ssh public_key=@~/.ssh/id_ed25519.pub
 ```
 
-### SSH Connection Fails
-```bash
-# Verify OS Login is enabled
-gcloud compute instances describe VM_NAME --format="value(metadata.items[enable-oslogin])"
-
-# Check IAM permissions
-gcloud compute instances get-iam-policy VM_NAME
-
-# Test SSH manually
-gcloud compute ssh VM_NAME --tunnel-through-iap
-```
+**Patch summary missing**
+- Check that `reboot_required` stat task runs before the summary delegation in the playbook
+- Verify `patch_results` fact is being set on localhost via `delegate_facts: true`
 
 ---
 
-## 📊 Cost Estimate
-
-| Resource | Monthly Cost (us-central1) |
-|----------|---------------------------|
-| 2x e2-medium VMs | ~$50 |
-| Networking | ~$5 |
-| Workload Identity | Free |
-| OS Login | Free |
-| **Total** | **~$55** |
-
-**Optimization:**
-- Use preemptible VMs: -70% cost
-- Schedule shutdown: -50% cost (off-hours)
-- Committed use: -57% cost (1-year)
-
----
-
-## 📁 Project Structure
+## Project structure
 
 ```
 .
-├── README.md                          # This file
-├── Taskfile.yml                       # Automation tasks
-├── bootstrap/                         # One-time setup (Vault + GCP + TFC)
-│   ├── main.tf
+├── Taskfile.yml                        # All automation tasks
+├── bootstrap/                          # One-time setup (run once per environment)
+│   ├── main.tf                         # Vault + GCP + HCP Terraform config
 │   ├── variables.tf
 │   ├── outputs.tf
 │   └── terraform.tfvars.example
-├── terraform/
-│   ├── main.tf                        # VM + Workload Identity
-│   ├── providers.tf                   # Dynamic credentials
-│   ├── actions.tf                     # Terraform Actions + AAP
+├── terraform/                          # Main infrastructure
+│   ├── main.tf                         # VMs + Workload Identity
+│   ├── providers.tf                    # Dynamic credentials via Vault
+│   ├── actions.tf                      # Terraform Actions → AAP trigger
 │   ├── variables.tf
 │   ├── outputs.tf
 │   └── terraform.tfvars.example
 ├── ansible/
-│   └── gcp_vm_patching_demo.yml       # Patching playbook
+│   └── gcp_vm_patching_demo.yml        # Patching playbook with summary report
 └── scripts/
-    └── aap-vault-ssh-credential.json  # AAP credential type definition
+    └── aap-vault-ssh-credential.json   # AAP credential type definition
 ```
 
 ---
 
-## 🎯 Task Commands
+## Cost estimate
 
-```bash
-# Quick start
-task quick-deploy      # Show quick deployment guide
-task bootstrap         # Run complete bootstrap setup
-task add-ssh-ca        # Add Vault SSH CA to GCP
-task setup-aap         # Show AAP setup guide
+| Resource | Monthly (us-central1) |
+|---|---|
+| 2x e2-medium VMs | ~$50 |
+| Networking | ~$5 |
+| Vault, Workload Identity | Free tier |
+| **Total** | **~$55** |
 
-# Testing
-task test              # Test entire deployment
-task test-vault        # Test Vault connectivity
-task test-vms          # Check VMs are running
-
-# Bootstrap helpers
-task bootstrap-apply   # Apply bootstrap configuration
-task bootstrap-output  # Show bootstrap outputs
-
-# Cleanup
-task clean             # Clean temporary files
-```
+Reduce cost: preemptible VMs (-70%), scheduled shutdown (-50%), committed use (-57%).
 
 ---
 
-## 🔄 Architecture Deep Dive
+## Resources
 
-### Dynamic Credential Chain
-
-```mermaid
-sequenceDiagram
-    participant Dev as Developer
-    participant GH as GitHub
-    participant TFC as HCP Terraform
-    participant Vault as HCP Vault
-    participant GCP as Google Cloud
-    participant AAP as Ansible AAP
-    participant VM as GCP VMs
-
-    Dev->>GH: git push
-    GH->>TFC: webhook trigger
-    TFC->>Vault: JWT Auth (20-min)
-    Vault->>TFC: Vault Token
-    TFC->>Vault: Read GCP token
-    Vault->>TFC: GCP Access Token (1-hour)
-    TFC->>GCP: Provision VMs + OIDC
-    TFC->>Vault: Read AAP OAuth2
-    Vault->>TFC: AAP Credentials
-    TFC->>AAP: Trigger Job (OAuth2)
-    AAP->>GCP: OIDC Auth
-    GCP->>AAP: Service Account Token
-    AAP->>VM: SSH via OS Login
-    VM->>AAP: Access Granted (IAM)
-    AAP->>VM: Patch & Configure
-```
-
-### Key Components
-
-**1. HCP Terraform Cloud**
-- Infrastructure orchestration
-- JWT authentication to Vault
-- Terraform Actions for automation
-- Remote state management
-
-**2. HCP Vault**
-- Dynamic GCP token generation
-- AAP credential storage
-- JWT authentication
-- Audit logging
-
-**3. Google Cloud Platform**
-- VM hosting (Ubuntu 20.04 LTS)
-- Workload Identity Federation (OIDC)
-- OS Login (IAM-based SSH)
-- Cloud Audit Logs
-
-**4. Ansible Automation Platform**
-- Configuration management
-- VM patching orchestration
-- OIDC authentication to GCP
-- Job template execution
-
-### Security Model
-
-**Principle: Zero Trust, Zero Static Credentials**
-
-Every credential is:
-- ✅ Dynamically generated
-- ✅ Short-lived (TTL enforced)
-- ✅ Automatically rotated
-- ✅ Fully audited
-- ✅ Never stored in code or state
-
-**Attack Surface: Minimal**
-- No SSH keys to steal
-- No service account keys to leak
-- No passwords in configuration
-- All access is IAM-based
-- Complete audit trail
-
----
-
-## 🚀 Production Deployment
-
-### Pre-Production Checklist
-
-```bash
-# 1. Validate everything
-task validate
-
-# 2. Review configuration
-cat terraform/terraform.tfvars
-
-# 3. Set production environment
-environment = "production"
-aap_server_ip = "YOUR_AAP_IP"
-
-# 4. Enable security features
-# Remove AAP_INSECURE_SKIP_VERIFY
-# Enable Vault audit logging
-# Enable GCP Cloud Audit Logs
-
-# 5. Deploy
-git push origin main
-```
-
-### Monitoring Setup
-
-**Terraform Runs:**
-- HCP Terraform UI → Notifications
-- Slack/Email alerts on failures
-
-**AAP Jobs:**
-- AAP → Notifications
-- Webhook to monitoring system
-
-**VM Patching:**
-- GCP Cloud Monitoring
-- Custom dashboards for patch compliance
-
-**Cost Monitoring:**
-- GCP Billing alerts
-- Budget thresholds
-
----
-
-## 📚 Additional Resources
-
-### Documentation
-- [Terraform Actions](https://developer.hashicorp.com/terraform/cloud-docs/integrations/run-tasks)
+- [Terraform Actions docs](https://developer.hashicorp.com/terraform/cloud-docs/integrations/run-tasks)
 - [Vault JWT Auth](https://developer.hashicorp.com/vault/docs/auth/jwt)
 - [Vault GCP Secrets](https://developer.hashicorp.com/vault/docs/secrets/gcp)
-- [GCP Workload Identity](https://cloud.google.com/iam/docs/workload-identity-federation)
-- [GCP OS Login](https://cloud.google.com/compute/docs/oslogin)
+- [Vault SSH CA](https://developer.hashicorp.com/vault/docs/secrets/ssh/signed-ssh-certificates)
+- [GCP Workload Identity Federation](https://cloud.google.com/iam/docs/workload-identity-federation)
 - [AAP Provider](https://registry.terraform.io/providers/ansible/aap/latest/docs)
 
-### Support
-- GitHub Issues: Report bugs or request features
-- HashiCorp Community: [discuss.hashicorp.com](https://discuss.hashicorp.com)
-- GCP Support: [cloud.google.com/support](https://cloud.google.com/support)
+---
+
+## License
+
+MIT — see [LICENSE](./LICENSE)
 
 ---
 
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create feature branch: `git checkout -b feature/amazing-feature`
-3. Commit changes: `git commit -m 'Add amazing feature'`
-4. Push to branch: `git push origin feature/amazing-feature`
-5. Open Pull Request
-
----
-
-## 📄 License
-
-MIT License - See [LICENSE](./LICENSE) file
-
----
-
-## ✨ Author
-
-**Dr. Rahul Gaikwad**  
-HashiCorp Solutions Architect
-
----
-
-## 🏆 Version
-
-**v3.0.0** - Production Ready with Bootstrap Automation (March 2026)
-
-**Status:** ✅ Zero static credentials, <60 min deployment, production-tested
-
-**Key Features:**
-- ✅ Automated bootstrap module
-- ✅ Vault SSH CA (30-min TTL certificates)
-- ✅ Dynamic GCP credentials (Vault secrets engine)
-- ✅ AppRole authentication for AAP
-- ✅ Terraform Actions automation
-- ✅ Terraform-managed AAP inventory
-- ✅ Complete audit trail
-- ✅ Production-ready security
-
-**New in v3.0.0:**
-- 🆕 Bootstrap module for automated setup
-- 🆕 Vault SSH CA integration
-- 🆕 Consolidated AAP credential type
-- 🆕 Streamlined deployment (<60 min)
-- 🆕 Removed all static credentials
-- 🆕 Simplified task commands
-
----
-
-**🎉 Ready to deploy? Run `task quick-deploy` to get started!**
-
----
-
-## ✅ Deployment Checklist
-
-### Pre-Deployment
-
-#### Tools Installation
-- [ ] `gcloud` CLI installed and configured
-- [ ] `vault` CLI installed
-- [ ] `terraform` CLI installed (optional for HCP Terraform)
-- [ ] `jq` installed (optional but recommended)
-
-#### Access Verification
-- [ ] GCP project created with billing enabled
-- [ ] HCP Terraform account created
-- [ ] HCP Vault cluster created
-- [ ] Ansible Automation Platform instance available
-- [ ] GitHub repository created
-
-### 1. GCP Setup
-
-#### Project Configuration
-- [ ] GCP project ID noted: `_________________`
-- [ ] Billing enabled on project
-- [ ] Authenticated to GCP: `gcloud auth login`
-- [ ] Project set: `gcloud config set project PROJECT_ID`
-
-#### API Enablement
-- [ ] Compute Engine API enabled
-- [ ] IAM API enabled
-- [ ] Cloud Resource Manager API enabled
-- [ ] IAM Credentials API enabled
-
-```bash
-gcloud services enable compute.googleapis.com \
-  iam.googleapis.com \
-  cloudresourcemanager.googleapis.com \
-  iamcredentials.googleapis.com
-```
-
-### 2. Vault Setup
-
-#### JWT Auth Configuration
-- [ ] JWT auth method enabled: `vault auth enable jwt`
-- [ ] JWT config written with Terraform Cloud issuer
-- [ ] Policy created: `terraform-provisioner`
-- [ ] JWT role created: `terraform-cloud` with correct org bound_claims
-- [ ] JWT role tested: `vault read auth/jwt/role/terraform-cloud`
-
-#### GCP Secrets Engine
-- [ ] GCP secrets engine enabled: `vault secrets enable gcp`
-- [ ] GCP config written with service account credentials
-- [ ] Roleset created: `terraform-provisioner` with required IAM roles
-- [ ] Token generation tested: `vault read gcp/token/terraform-provisioner`
-- [ ] Service account key deleted from local system
-
-#### KV Secrets Engine
-- [ ] KV v2 enabled at `secret/`
-- [ ] AAP credentials stored: `vault kv put secret/aap/credentials hostname=... username=... password=...`
-- [ ] Credentials tested: `vault kv get secret/aap/credentials`
-
-### 3. AAP Setup
-
-#### OAuth2 Application
-- [ ] Application created: `Terraform Automation`
-- [ ] Grant type: Resource owner password-based, Client type: Confidential
-- [ ] Client ID and Secret noted and stored in Vault
-
-#### Project & Job Template
-- [ ] Ansible project created and synced with Git repository
-- [ ] Playbook `gcp_vm_patching_demo.yml` available
-- [ ] Job template created: `Patch GCP VMs`
-- [ ] Inventory: `demo-gcp-vms` (auto-created by Terraform)
-- [ ] Credentials: `Vault SSH` attached
-- [ ] Job template ID noted and set in Terraform variable `aap_job_template_id`
-- [ ] Job template launched manually and completed successfully
-
-### 4. HCP Terraform Setup
-
-#### Workspace
-- [ ] Workspace created: `tf-actions-vault-aap-gcp`
-- [ ] VCS connection configured (GitHub), working directory: `terraform`
-
-#### Environment Variables
-- [ ] `TFC_VAULT_BACKED_JWT_AUTH=true`
-- [ ] `TFC_VAULT_PROVIDER_AUTH=true`
-- [ ] `TFC_VAULT_ADDR=https://vault.hashicorp.cloud:8200`
-- [ ] `TFC_VAULT_NAMESPACE=admin`
-- [ ] `AAP_INSECURE_SKIP_VERIFY=true` (demo only — remove for production)
-
-#### Terraform Variables
-- [ ] `vault_addr`, `vault_namespace`, `vault_gcp_roleset`
-- [ ] `gcp_project_id`, `gcp_region`, `gcp_zone`
-- [ ] `aap_hostname`, `aap_oidc_issuer_url`, `aap_oidc_repository`, `aap_job_template_id`
-- [ ] `vault_ssh_ca_public_key` (from Step 3), `ansible_user` (`ubuntu`), `environment`, `vm_count`, `aap_server_ip`
-
-### 5. Deployment Verification
-
-- [ ] Terraform run completed, VMs created, AAP inventory populated
-- [ ] Terraform Actions triggered AAP job automatically
-- [ ] VMs patched successfully, logs reviewed
-
-### 6. Production Hardening
-
-- [ ] `environment` set to `production`, `aap_server_ip` configured
-- [ ] `AAP_INSECURE_SKIP_VERIFY` removed (TLS verification enabled)
-- [ ] Vault audit logging enabled
-- [ ] GCP Cloud Audit Logs enabled
-- [ ] Monitoring and alerting configured (Terraform, AAP, cost alerts)
-
----
-
-## 🔄 Rollback Procedures
-
-### Terraform Changes
-
-```bash
-# Option 1: Revert Git commit
-git revert HEAD && git push origin main
-
-# Option 2: Rollback in HCP Terraform UI
-# Workspaces → Runs → Select previous successful run → Rollback
-```
-
-### Emergency: Stop All Patching
-
-```bash
-# Disable job template in AAP
-# Templates → Patch GCP VMs → Edit → Enabled: No
-```
-
-### Restore VM from Snapshot
-
-```bash
-gcloud compute disks snapshot DISK_NAME --snapshot-names=SNAPSHOT_NAME
-gcloud compute disks create NEW_DISK --source-snapshot=SNAPSHOT_NAME
-gcloud compute instances attach-disk VM_NAME --disk=NEW_DISK
-```
-
----
-
-## ✔️ Success Criteria
-
-| Area | Criteria |
-|------|----------|
-| Deployment | All VMs running, OS Login enabled, AAP inventory populated, Terraform Actions triggering |
-| Security | Zero static credentials, all credentials dynamic, audit logging enabled, least-privilege IAM |
-| Operations | GitOps workflow functioning, monitoring active, documentation complete |
-
+**v3.0.0** · Dr. Rahul Gaikwad · HashiCorp Solutions Architect

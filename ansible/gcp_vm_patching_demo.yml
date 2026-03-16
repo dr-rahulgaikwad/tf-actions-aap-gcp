@@ -164,42 +164,28 @@
       delay: 30
       until: upgrade_result is succeeded
 
-    - name: Parse upgraded packages
-      set_fact:
-        patched_packages: "{{ upgrade_result.stdout | regex_findall('Unpacking ([^\\s:]+)') | unique }}"
-
-    - name: Store patch summary for this host
-      set_fact:
-        host_patch_summary:
-          host: "{{ inventory_hostname }}"
-          ip: "{{ ansible_host }}"
-          changed: "{{ upgrade_result.changed }}"
-          package_count: "{{ patched_packages | length }}"
-          packages: "{{ patched_packages }}"
-          reboot_required: "{{ (reboot_required.stat.exists | default(false)) }}"
-      when: reboot_required is defined
-
-    - name: Store patch summary (pre-reboot check)
-      set_fact:
-        host_patch_summary:
-          host: "{{ inventory_hostname }}"
-          ip: "{{ ansible_host }}"
-          changed: "{{ upgrade_result.changed }}"
-          package_count: "{{ patched_packages | length }}"
-          packages: "{{ patched_packages }}"
-          reboot_required: false
-      when: reboot_required is not defined
-
-    - name: Share summary with localhost
-      delegate_to: localhost
-      delegate_facts: true
-      set_fact:
-        patch_results: "{{ (hostvars['localhost'].patch_results | default([])) + [host_patch_summary] }}"
-
     - name: Check if reboot required
       stat:
         path: /var/run/reboot-required
       register: reboot_required
+
+    - name: Parse upgraded packages
+      set_fact:
+        patched_packages: "{{ upgrade_result.stdout | regex_findall('Unpacking ([^\\s:]+)') | unique }}"
+
+    - name: Share patch summary with localhost
+      delegate_to: localhost
+      delegate_facts: true
+      set_fact:
+        patch_results: >-
+          {{ (hostvars['localhost'].patch_results | default([])) + [{
+            'host': inventory_hostname,
+            'ip': ansible_host,
+            'changed': upgrade_result.changed,
+            'package_count': patched_packages | length,
+            'packages': patched_packages,
+            'reboot_required': reboot_required.stat.exists
+          }] }}
 
     - name: Reboot if required and allowed
       reboot:

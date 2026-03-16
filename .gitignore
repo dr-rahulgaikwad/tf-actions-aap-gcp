@@ -42,9 +42,13 @@ Thumbs.db
 # Kiro
 .kiro/
 
-# Demo and Architecture files (keep local only)
+# Local-only working files
+blog.md
+original.md
+blog_changes_highlighted.html
 ARCHITECTURE_DIAGRAMS.md
 DEMO_SCRIPT.md
+
 # AI tool configs
 .agents/
 .crush/

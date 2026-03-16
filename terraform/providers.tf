@@ -72,5 +72,5 @@ provider "aap" {
   host                 = data.vault_kv_secret_v2.aap_creds.data["hostname"]
   username             = data.vault_kv_secret_v2.aap_creds.data["username"]
   password             = data.vault_kv_secret_v2.aap_creds.data["password"]
-  insecure_skip_verify = true
+  insecure_skip_verify = var.aap_insecure_skip_verify
 }

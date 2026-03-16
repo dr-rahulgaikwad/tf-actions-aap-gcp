@@ -1,38 +1,37 @@
-# Terraform Variables Configuration
-# Copy this file to terraform.tfvars and fill in your values
+# Terraform Variables — copy to terraform.tfvars and fill in your values
+# Note: Most variables are auto-set by the bootstrap module in HCP Terraform workspace.
+#       Only the ones marked "set manually" need your attention.
 
-# Vault Configuration
-vault_addr              = "https://your-vault.vault.hashicorp.cloud:8200"
-vault_namespace         = "admin"
-vault_gcp_roleset       = "terraform-provisioner"
+# Vault
+vault_addr        = "https://your-vault.vault.hashicorp.cloud:8200"
+vault_namespace   = "admin"
+vault_gcp_roleset = "terraform-provisioner"
 
-# GCP Configuration
-gcp_project_id          = "your-project-id"
-gcp_region              = "us-central1"
-gcp_zone                = "us-central1-a"
+# GCP
+gcp_project_id = "your-project-id"
+gcp_region     = "us-central1"
+gcp_zone       = "us-central1-a"
 
-# VM Configuration
-vm_count                = 2
-vm_machine_type         = "e2-medium"
-ubuntu_image            = "ubuntu-os-cloud/ubuntu-2004-lts"
+# VMs
+vm_count        = 2
+vm_machine_type = "e2-medium"
+ubuntu_image    = "projects/ubuntu-os-cloud/global/images/ubuntu-2004-focal-v20231101"
 
-# AAP Configuration
-aap_hostname            = "https://your-aap-server.example.com"
-aap_oidc_issuer_url     = "https://your-aap-server.example.com"
-aap_oidc_repository     = "your-org/your-repo"
-aap_job_template_id     = 14  # Update after creating job template in AAP
+# AAP
+aap_hostname        = "https://your-aap-server.example.com"
+aap_oidc_issuer_url = "https://your-aap-server.example.com"
+aap_oidc_repository = "your-org/tf-actions-aap-gcp"
+aap_job_template_id = 0 # Set after creating job template in AAP (Step 4.4)
 
-# SSH Configuration (from OS Login)
-ansible_user            = "rahul_gaikwad_hashicorp_com"  # Get from: gcloud compute os-login describe-profile --format='value(posixAccounts[0].username)'
+# SSH
+ansible_user = "ubuntu"
 
-# Environment Configuration
-environment             = "demo"  # Options: demo, dev, staging, production
-managed_by              = "terraform"
+# Vault SSH CA public key — from: cd bootstrap && terraform output -raw vault_ssh_ca_public_key
+vault_ssh_ca_public_key = "ssh-rsa AAAA..."
 
-# Security Configuration (required for production)
-aap_server_ip           = ""  # Set to AAP server IP for production (e.g., "1.2.3.4")
+# Environment
+environment = "demo" # demo | dev | staging | production
 
-# Optional: Advanced Configuration
-enable_os_login         = true
-enable_cloud_logging    = true
-enable_cloud_monitoring = true
+# Security
+aap_server_ip           = ""    # Required for production: set to AAP server IP
+aap_insecure_skip_verify = true  # Set false in production (requires valid TLS cert on AAP)
