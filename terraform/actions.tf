@@ -63,13 +63,13 @@ print(json.dumps({
 }))")
 
       if [ -n "$CRED_ID" ]; then
-        curl -sk -o /dev/null -w "AAP credential update: %{http_code}\n" \
+        curl -sk -o /dev/null -w "AAP credential update: %%{http_code}\n" \
           -X PUT -u "$AAP_USER:$AAP_PASS" \
           -H "Content-Type: application/json" \
           -d "$PAYLOAD" \
           "$AAP_HOST/api/controller/v2/credentials/$CRED_ID/"
       else
-        curl -sk -o /dev/null -w "AAP credential create: %{http_code}\n" \
+        curl -sk -o /dev/null -w "AAP credential create: %%{http_code}\n" \
           -X POST -u "$AAP_USER:$AAP_PASS" \
           -H "Content-Type: application/json" \
           -d "$PAYLOAD" \
