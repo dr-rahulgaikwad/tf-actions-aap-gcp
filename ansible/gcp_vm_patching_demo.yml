@@ -86,12 +86,14 @@
         name: "{{ item.key }}"
         groups: gcp_vms
         ansible_host: "{{ item.value }}"
+        ansible_user: "{{ ansible_user | default('ubuntu') }}"
       loop: "{{ vm_hosts | dict2items }}"
       when: vm_hosts is defined
 
 # Play 2: Patch VMs using the Vault-signed certificate
 - name: Patch GCP Ubuntu VMs
   hosts: gcp_vms
+  remote_user: "{{ ansible_user | default('ubuntu') }}"
   become: yes
   become_method: sudo
   gather_facts: no
