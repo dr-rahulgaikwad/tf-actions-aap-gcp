@@ -7,14 +7,14 @@
   tasks:
     - name: Authenticate to Vault via AppRole
       uri:
-        url: "{{ lookup('env', 'VAULT_ADDR') }}/v1/auth/approle/login"
+        url: "{{ vault_addr }}/v1/auth/approle/login"
         method: POST
         headers:
-          X-Vault-Namespace: "{{ lookup('env', 'VAULT_NAMESPACE') | default('admin', true) }}"
+          X-Vault-Namespace: "{{ vault_namespace | default('admin') }}"
         body_format: json
         body:
-          role_id: "{{ lookup('env', 'VAULT_ROLE_ID') }}"
-          secret_id: "{{ lookup('env', 'VAULT_SECRET_ID') }}"
+          role_id: "{{ vault_role_id }}"
+          secret_id: "{{ vault_secret_id }}"
         validate_certs: no
         status_code: 200
       register: vault_login
@@ -50,11 +50,11 @@
 
     - name: Sign public key with Vault SSH CA
       uri:
-        url: "{{ lookup('env', 'VAULT_ADDR') }}/v1/ssh/sign/{{ lookup('env', 'VAULT_SSH_ROLE') | default('aap-ssh', true) }}"
+        url: "{{ vault_addr }}/v1/ssh/sign/{{ vault_ssh_role | default('aap-ssh') }}"
         method: POST
         headers:
           X-Vault-Token: "{{ vault_token }}"
-          X-Vault-Namespace: "{{ lookup('env', 'VAULT_NAMESPACE') | default('admin', true) }}"
+          X-Vault-Namespace: "{{ vault_namespace | default('admin') }}"
         body_format: json
         body:
           public_key: "{{ ssh_pubkey.content | b64decode }}"
