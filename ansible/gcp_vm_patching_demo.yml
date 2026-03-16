@@ -26,10 +26,17 @@
       set_fact:
         vault_token: "{{ vault_login.json.auth.client_token }}"
 
+    - name: Remove stale SSH keypair if exists
+      file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /tmp/aap_ssh_key
+        - /tmp/aap_ssh_key.pub
+        - /tmp/aap_ssh_key-cert.pub
+
     - name: Generate ephemeral SSH keypair
       command: ssh-keygen -t ed25519 -f /tmp/aap_ssh_key -N "" -C "aap-ephemeral"
-      args:
-        creates: /tmp/aap_ssh_key
 
     - name: Read public key
       slurp:
@@ -60,6 +67,11 @@
         dest: /tmp/aap_ssh_key-cert.pub
         mode: "0600"
 
+    - name: Set correct permissions on private key
+      file:
+        path: /tmp/aap_ssh_key
+        mode: "0600"
+
     - name: Debug SSH setup
       debug:
         msg:
@@ -72,7 +84,10 @@
 # Play 2: Patch VMs using the signed certificate
 - name: Patch GCP Ubuntu VMs using OS Login
   hosts: all
+  # OS Login: sudo is available but requires full path on some distros.
+  # become_method: sudo works; we set the full sudo path to handle PATH issues.
   become: yes
+  become_method: sudo
   gather_facts: no
 
   vars:
@@ -80,23 +95,39 @@
     reboot_timeout: 600
     patch_type: "{{ patch_type | default('security') }}"
     reboot_allowed: "{{ reboot_allowed | default(true) }}"
+
+    # SSH connection — use the Vault-signed certificate
     ansible_ssh_private_key_file: /tmp/aap_ssh_key
     ansible_ssh_common_args: >-
       -o CertificateFile=/tmp/aap_ssh_key-cert.pub
       -o StrictHostKeyChecking=no
       -o UserKnownHostsFile=/dev/null
+      -o ConnectTimeout=30
+      -o ServerAliveInterval=10
+      -o ServerAliveCountMax=6
+
+    # GCP OS Login: sudo binary is at /usr/bin/sudo but PATH may be minimal
+    ansible_become_exe: /usr/bin/sudo
+    # Pass a clean PATH so modules can find system binaries
+    ansible_become_flags: "-H -S -n"
 
   pre_tasks:
-    - name: Wait for SSH connection
-      wait_for_connection:
-        connect_timeout: 15
+    - name: Wait for SSH port to be open
+      wait_for:
+        host: "{{ ansible_host }}"
+        port: 22
         timeout: 300
-        delay: 10
+        delay: 5
+        state: started
+      delegate_to: localhost
+      become: no
+
+    - name: Wait for SSH connection to be usable
+      wait_for_connection:
+        connect_timeout: 20
+        timeout: 300
+        delay: 5
         sleep: 10
-      retries: 5
-      delay: 15
-      register: connection_result
-      until: connection_result is succeeded
 
     - name: Gather facts
       setup:
@@ -119,8 +150,7 @@
       until: apt_update is succeeded
 
     - name: Check available updates
-      shell: |
-        apt list --upgradable 2>/dev/null | grep -v "Listing..." | wc -l
+      shell: apt list --upgradable 2>/dev/null | grep -v "Listing..." | wc -l
       register: update_count
       changed_when: false
 
