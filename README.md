@@ -10,10 +10,65 @@ Production-ready automated VM patching with zero static credentials. A git push 
 
 ## How it works
 
-```
-git push → HCP Terraform → Vault JWT auth → GCP dynamic token → provision VMs
-                                          → AAP credentials  → trigger patching job
-                                                               → Vault SSH CA cert → SSH → patch
+```mermaid
+flowchart LR
+    DEV(["👨‍💻 git push"]):::trigger
+
+    subgraph HCP ["🏢 HashiCorp Cloud Platform"]
+        direction TB
+        subgraph TFC ["☁️ HCP Terraform"]
+            PLAN["Plan + Apply"]
+            ACTION["Terraform Action\naap_job_launch"]
+        end
+        subgraph VAULT ["🔐 HCP Vault"]
+            V1["JWT Auth\n⏱ 20 min"]
+            V2["GCP Secrets\n⏱ 1 hr"]
+            V3["KV — AAP creds\n+ AppRole"]
+            V4["SSH CA\n⏱ 30 min"]
+        end
+    end
+
+    subgraph GCP ["🖥️ Google Cloud"]
+        VM["Ubuntu VMs\nVault SSH CA\ntrusted by sshd"]
+    end
+
+    subgraph AAP ["🤖 Ansible Automation Platform"]
+        P1["Play 1\nAppRole → sign cert\nbuild inventory"]
+        P2["Play 2\napt dist-upgrade\nreboot if needed"]
+        P3["Play 3\nPatch summary\nreport"]
+    end
+
+    RESULT(["✅ Patch Report"]):::done
+
+    DEV -->|webhook| PLAN
+    PLAN -->|JWT| V1
+    V1 --> V2 & V3
+    V2 -->|GCP token| GCP
+    V3 -->|creds + AppRole\nas extra_vars| ACTION
+    GCP -->|VMs ready| ACTION
+    ACTION -->|job launch| P1
+    P1 -->|AppRole login| V4
+    V4 -->|signed cert| P1
+    P1 -->|SSH + cert| P2
+    P2 --> P3 --> RESULT
+
+    classDef trigger fill:#e8eeff,stroke:#4a6cf7,color:#1a1a2e,font-weight:bold
+    classDef done fill:#e8fff0,stroke:#27ae60,color:#1a3a1a,font-weight:bold
+    style HCP fill:#f5f0ff,stroke:#6b46c1
+    style TFC fill:#e8f8ff,stroke:#0099cc
+    style VAULT fill:#fff8e8,stroke:#e67e22
+    style GCP fill:#e8f4ff,stroke:#1a73e8
+    style AAP fill:#f0e8ff,stroke:#8e44ad
+    style PLAN fill:#e8f8ff,stroke:#0099cc
+    style ACTION fill:#e8f8ff,stroke:#0099cc
+    style V1 fill:#fff8e8,stroke:#e67e22
+    style V2 fill:#fff8e8,stroke:#e67e22
+    style V3 fill:#fff8e8,stroke:#e67e22
+    style V4 fill:#fff8e8,stroke:#e67e22
+    style VM fill:#e8f4ff,stroke:#1a73e8
+    style P1 fill:#f0e8ff,stroke:#8e44ad
+    style P2 fill:#f0e8ff,stroke:#8e44ad
+    style P3 fill:#f0e8ff,stroke:#8e44ad
 ```
 
 Every credential is dynamically generated with a short TTL. Nothing is stored in code or state.
@@ -321,8 +376,8 @@ vault write ssh/sign/aap-ssh public_key=@~/.ssh/id_ed25519.pub
 ```
 
 **Patch summary missing**
-- Check that `reboot_required` stat task runs before the summary delegation in the playbook
-- Verify `patch_results` fact is being set on localhost via `delegate_facts: true`
+- Ensure AAP project is synced after any playbook changes (AAP UI → Projects → sync)
+- `set_stats` with `aggregate: yes, per_host: no` is used to accumulate results across hosts — verify AAP execution environment has `ansible.builtin.set_stats` available
 
 ---
 
