@@ -26,7 +26,7 @@
       set_fact:
         vault_token: "{{ vault_login.json.auth.client_token }}"
 
-    - name: Remove stale SSH keypair if exists
+    - name: Remove stale SSH keypair
       file:
         path: "{{ item }}"
         state: absent
@@ -37,6 +37,11 @@
 
     - name: Generate ephemeral SSH keypair
       command: ssh-keygen -t ed25519 -f /tmp/aap_ssh_key -N "" -C "aap-ephemeral"
+
+    - name: Set correct permissions on private key
+      file:
+        path: /tmp/aap_ssh_key
+        mode: "0600"
 
     - name: Read public key
       slurp:
@@ -67,25 +72,16 @@
         dest: /tmp/aap_ssh_key-cert.pub
         mode: "0600"
 
-    - name: Set correct permissions on private key
-      file:
-        path: /tmp/aap_ssh_key
-        mode: "0600"
-
     - name: Debug SSH setup
       debug:
         msg:
           - "Vault auth: OK"
           - "SSH cert signed for principal: {{ vault_ssh_user | default(ansible_user) }}"
           - "Cert serial: {{ vault_ssh_cert.json.data.serial_number }}"
-          - "Private key: /tmp/aap_ssh_key"
-          - "Certificate: /tmp/aap_ssh_key-cert.pub"
 
-# Play 2: Patch VMs using the signed certificate
-- name: Patch GCP Ubuntu VMs using OS Login
+# Play 2: Patch VMs using the Vault-signed certificate
+- name: Patch GCP Ubuntu VMs
   hosts: all
-  # OS Login: sudo is available but requires full path on some distros.
-  # become_method: sudo works; we set the full sudo path to handle PATH issues.
   become: yes
   become_method: sudo
   gather_facts: no
@@ -95,8 +91,6 @@
     reboot_timeout: 600
     patch_type: "{{ patch_type | default('security') }}"
     reboot_allowed: "{{ reboot_allowed | default(true) }}"
-
-    # SSH connection — use the Vault-signed certificate
     ansible_ssh_private_key_file: /tmp/aap_ssh_key
     ansible_ssh_common_args: >-
       -o CertificateFile=/tmp/aap_ssh_key-cert.pub
@@ -105,10 +99,7 @@
       -o ConnectTimeout=30
       -o ServerAliveInterval=10
       -o ServerAliveCountMax=6
-
-    # GCP OS Login: sudo binary is at /usr/bin/sudo but PATH may be minimal
     ansible_become_exe: /usr/bin/sudo
-    # Pass a clean PATH so modules can find system binaries
     ansible_become_flags: "-H -S -n"
 
   pre_tasks:
@@ -137,7 +128,6 @@
         msg:
           - "Connected to: {{ inventory_hostname }} ({{ ansible_host }})"
           - "OS: {{ ansible_distribution }} {{ ansible_distribution_version }}"
-          - "Kernel: {{ ansible_kernel }}"
 
   tasks:
     - name: Update apt cache
@@ -148,15 +138,6 @@
       retries: 3
       delay: 10
       until: apt_update is succeeded
-
-    - name: Check available updates
-      shell: apt list --upgradable 2>/dev/null | grep -v "Listing..." | wc -l
-      register: update_count
-      changed_when: false
-
-    - name: Debug pre-patch status
-      debug:
-        msg: "{{ inventory_hostname }}: {{ update_count.stdout }} updates available"
 
     - name: Apply patches
       apt:
@@ -173,7 +154,7 @@
 
     - name: Debug patch result
       debug:
-        msg: "{{ inventory_hostname }}: patching {{ 'changed packages' if upgrade_result.changed else 'no changes' }}"
+        msg: "{{ inventory_hostname }}: {{ 'changed' if upgrade_result.changed else 'no changes' }}"
 
     - name: Check if reboot required
       stat:
@@ -190,15 +171,6 @@
       when:
         - reboot_required.stat.exists
         - reboot_allowed | bool
-      register: reboot_result
-
-    - name: Debug reboot status
-      debug:
-        msg: >-
-          {{ inventory_hostname }}: {{
-            'rebooted successfully' if (reboot_result is defined and reboot_result.rebooted)
-            else ('reboot required but skipped' if reboot_required.stat.exists
-            else 'no reboot needed') }}
 
 # Play 3: Summary
 - name: Patching summary

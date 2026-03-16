@@ -106,8 +106,20 @@ resource "google_compute_instance" "ubuntu_vms" {
   }
 
   metadata = {
-    enable-oslogin = "TRUE"
+    enable-oslogin = "FALSE"
   }
+
+  # Configure sshd to trust Vault SSH CA at first boot.
+  # This is the same approach as baking it into a Packer AMI, but done via startup script.
+  # Allows Vault-signed ephemeral SSH certificates to authenticate without OS Login.
+  metadata_startup_script = <<-EOF
+    #!/bin/bash
+    echo '${var.vault_ssh_ca_public_key}' > /etc/ssh/trusted-user-ca-keys.pem
+    chmod 644 /etc/ssh/trusted-user-ca-keys.pem
+    grep -q '^TrustedUserCAKeys' /etc/ssh/sshd_config || \
+      echo 'TrustedUserCAKeys /etc/ssh/trusted-user-ca-keys.pem' >> /etc/ssh/sshd_config
+    systemctl restart sshd
+  EOF
 
   service_account {
     email = google_service_account.ansible_sa.email

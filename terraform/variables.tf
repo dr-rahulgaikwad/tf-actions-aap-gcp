@@ -188,3 +188,8 @@ variable "ansible_user" {
   type        = string
   default     = ""
 }
+
+variable "vault_ssh_ca_public_key" {
+  description = "Vault SSH CA public key to trust on VMs (from: cd bootstrap && terraform output -raw vault_ssh_ca_public_key)"
+  type        = string
+}
