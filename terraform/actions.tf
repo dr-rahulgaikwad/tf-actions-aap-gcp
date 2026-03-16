@@ -7,9 +7,75 @@ resource "aap_inventory" "vms" {
   organization = 1
 }
 
-# Gate: tracks VM readiness without any AAP dependency
-# VM create/destroy is fully independent of AAP availability
-resource "terraform_data" "vms_ready" {
+# AAP Credential — managed via API since the AAP provider has no credential resource
+# Runs on every apply to ensure role_id, secret_id, and ssh_user are always correct
+resource "terraform_data" "aap_credential" {
+  # Re-run whenever AppRole creds or ansible_user changes
+  input = {
+    vault_addr   = var.vault_addr
+    ansible_user = var.ansible_user
+    role_id      = data.vault_kv_secret_v2.aap_approle.data["role_id"]
+  }
+
+  provisioner "local-exec" {
+    interpreter = ["/bin/bash", "-c"]
+    command     = <<-EOF
+      set -e
+      ROLE_ID="${data.vault_kv_secret_v2.aap_approle.data["role_id"]}"
+      SECRET_ID="${data.vault_kv_secret_v2.aap_approle.data["secret_id"]}"
+      AAP_HOST="${data.vault_kv_secret_v2.aap_creds.data["hostname"]}"
+      AAP_USER="${data.vault_kv_secret_v2.aap_creds.data["username"]}"
+      AAP_PASS="${data.vault_kv_secret_v2.aap_creds.data["password"]}"
+
+      # Get credential type ID for "Vault SSH Certificate"
+      CRED_TYPE_ID=$(curl -sk -u "$AAP_USER:$AAP_PASS" \
+        "$AAP_HOST/api/controller/v2/credential_types/?name=Vault+SSH+Certificate" \
+        | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['results'][0]['id'])" 2>/dev/null)
+
+      if [ -z "$CRED_TYPE_ID" ]; then
+        echo "WARNING: Vault SSH Certificate credential type not found in AAP — create it manually first"
+        exit 0
+      fi
+
+      # Check if credential exists
+      CRED_ID=$(curl -sk -u "$AAP_USER:$AAP_PASS" \
+        "$AAP_HOST/api/controller/v2/credentials/?name=Vault+SSH" \
+        | python3 -c "import sys,json; d=json.load(sys.stdin); r=d.get('results',[]); print(r[0]['id'] if r else '')" 2>/dev/null)
+
+      PAYLOAD=$(python3 -c "
+import json
+print(json.dumps({
+  'name': 'Vault SSH',
+  'credential_type': int('$CRED_TYPE_ID'),
+  'organization': 1,
+  'inputs': {
+    'vault_addr': '${var.vault_addr}',
+    'vault_namespace': '${var.vault_namespace}',
+    'role_id': '$ROLE_ID',
+    'secret_id': '$SECRET_ID',
+    'ssh_role': 'aap-ssh',
+    'ssh_user': '${var.ansible_user}'
+  }
+}))")
+
+      if [ -n "$CRED_ID" ]; then
+        curl -sk -o /dev/null -w "AAP credential update: %{http_code}\n" \
+          -X PUT -u "$AAP_USER:$AAP_PASS" \
+          -H "Content-Type: application/json" \
+          -d "$PAYLOAD" \
+          "$AAP_HOST/api/controller/v2/credentials/$CRED_ID/"
+      else
+        curl -sk -o /dev/null -w "AAP credential create: %{http_code}\n" \
+          -X POST -u "$AAP_USER:$AAP_PASS" \
+          -H "Content-Type: application/json" \
+          -d "$PAYLOAD" \
+          "$AAP_HOST/api/controller/v2/credentials/"
+      fi
+    EOF
+  }
+
+  depends_on = [time_sleep.wait_for_aap]
+}
   input = {
     vm_ids = [for vm in google_compute_instance.ubuntu_vms : vm.id]
   }
@@ -128,7 +194,8 @@ resource "terraform_data" "trigger_patch" {
 
   depends_on = [
     time_sleep.wait_for_vms,
-    aap_host.vms
+    aap_host.vms,
+    terraform_data.aap_credential
   ]
 }
 

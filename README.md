@@ -187,22 +187,13 @@ extra_vars:
 
 **4.2 — Create Credential**
 
+> ✅ **Auto-managed by Terraform** — the `Vault SSH` credential is automatically created/updated on every Terraform run using AppRole credentials from Vault. You only need to ensure the `Vault SSH Certificate` credential type exists (step 4.1).
+
+If you need to verify or manually recreate it:
 ```bash
-cat /tmp/approle.json
+cd bootstrap && terraform output -json approle_credentials
 ```
-
-- AAP UI → Resources → Credentials → Add
-- Name: `Vault SSH`
-- Credential Type: `Vault SSH Certificate`
-- Vault Address: `https://your-vault.vault.hashicorp.cloud:8200`
-- Vault Namespace: `admin`
-- AppRole Role ID: (from `/tmp/approle.json`)
-- AppRole Secret ID: (from `/tmp/approle.json`)
-- SSH Role Name: `aap-ssh`
-- SSH Username: `ubuntu` (default Linux user on Ubuntu GCP VMs)
-- Save
-
-> ⚠️ **Critical:** SSH Username in this credential must match the Linux user on the VM (`ubuntu` for Ubuntu images). The Vault SSH cert is signed with this as the principal — if it doesn't match the SSH login user, you get `Permission denied (publickey)`.
+Then in AAP UI → Resources → Credentials → `Vault SSH` — confirm all fields match.
 
 **4.3 — Create Project**
 
