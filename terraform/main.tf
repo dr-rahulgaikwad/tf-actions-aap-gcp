@@ -1,44 +1,3 @@
-# GCP VM Provisioning with OS Login SSH Authentication
-
-# Workload Identity Pool for AAP OIDC authentication
-resource "google_iam_workload_identity_pool" "aap_pool" {
-  workload_identity_pool_id = "aap-pool"
-  display_name              = "AAP Automation Pool"
-  description               = "Workload Identity Pool for Ansible Automation Platform OIDC"
-}
-
-resource "google_iam_workload_identity_pool_provider" "aap_provider" {
-  workload_identity_pool_id          = google_iam_workload_identity_pool.aap_pool.workload_identity_pool_id
-  workload_identity_pool_provider_id = "aap-oidc-provider"
-  display_name                       = "AAP OIDC Provider"
-  description                        = "OIDC provider for AAP authentication"
-
-  attribute_mapping = {
-    "google.subject"       = "assertion.sub"
-    "attribute.aud"        = "assertion.aud"
-    "attribute.repository" = "assertion.repository"
-  }
-
-  oidc {
-    issuer_uri = var.aap_oidc_issuer_url
-  }
-}
-
-# Service account for Ansible automation
-resource "google_service_account" "ansible_sa" {
-  account_id   = "ansible-automation"
-  display_name = "Ansible Automation Service Account"
-  description  = "Service account for Ansible OS Login SSH access via OIDC"
-}
-
-# Allow OIDC token to impersonate service account
-resource "google_service_account_iam_member" "workload_identity_user" {
-  service_account_id = google_service_account.ansible_sa.name
-  role               = "roles/iam.workloadIdentityUser"
-  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.aap_pool.name}/attribute.repository/${var.aap_oidc_repository}"
-}
-
-# Grant OS Login permissions at instance level
 # GCP VM Provisioning with Vault SSH CA Authentication
 # OS Login is disabled — sshd trusts Vault SSH CA via startup script (TrustedUserCAKeys)
 
@@ -167,4 +126,3 @@ resource "google_compute_instance" "ubuntu_vms" {
 resource "time_sleep" "wait_for_vms" {
   depends_on      = [google_compute_instance.ubuntu_vms]
   create_duration = "120s" # Allow startup script to complete
-}
