@@ -165,31 +165,13 @@ variable "aap_server_ip" {
   }
 }
 
-variable "enable_os_login" {
-  description = "Enable OS Login for IAM-based SSH authentication"
-  type        = bool
-  default     = true
-}
-
-variable "enable_cloud_logging" {
-  description = "Enable Cloud Logging for VMs"
-  type        = bool
-  default     = true
-}
-
-variable "enable_cloud_monitoring" {
-  description = "Enable Cloud Monitoring for VMs"
-  type        = bool
-  default     = true
-}
-
 variable "ansible_user" {
-  description = "OS Login username for Ansible SSH access (get from: gcloud compute os-login describe-profile --format='value(posixAccounts[0].username)')"
+  description = "Linux username for Ansible SSH (must match Vault SSH role allowed_users)"
   type        = string
-  default     = ""
+  default     = "ubuntu"
 }
 
 variable "vault_ssh_ca_public_key" {
-  description = "Vault SSH CA public key to trust on VMs (from: cd bootstrap && terraform output -raw vault_ssh_ca_public_key)"
+  description = "Vault SSH CA public key written to VM sshd TrustedUserCAKeys at boot (from: cd bootstrap && terraform output -raw vault_ssh_ca_public_key)"
   type        = string
 }

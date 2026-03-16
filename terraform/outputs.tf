@@ -14,7 +14,7 @@ output "vm_names" {
 }
 
 output "ansible_sa_email" {
-  description = "Ansible service account email for OS Login"
+  description = "Ansible service account email"
   value       = google_service_account.ansible_sa.email
 }
 
@@ -26,25 +26,6 @@ output "workload_identity_pool_name" {
 output "workload_identity_provider_name" {
   description = "Workload Identity Provider full resource name"
   value       = google_iam_workload_identity_pool_provider.aap_provider.name
-}
-
-output "oidc_configuration" {
-  description = "OIDC configuration for AAP credential"
-  value = {
-    service_account_email = google_service_account.ansible_sa.email
-    workload_provider     = google_iam_workload_identity_pool_provider.aap_provider.name
-    project_id            = var.gcp_project_id
-  }
-}
-
-output "os_login_setup_command" {
-  description = "Command to add SSH key to OS Login"
-  value       = "gcloud compute os-login ssh-keys add --key-file=~/.ssh/id_rsa.pub"
-}
-
-output "os_login_username_command" {
-  description = "Command to get OS Login username"
-  value       = "gcloud compute os-login describe-profile"
 }
 
 output "aap_inventory_id" {

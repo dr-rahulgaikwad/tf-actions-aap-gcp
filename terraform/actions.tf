@@ -7,16 +7,13 @@ resource "aap_inventory" "vms" {
   organization = 1
 }
 
-# Gate: only proceed to AAP host registration after VMs AND inventory are ready
-# This resource has no AAP dependency — it just tracks VM readiness
+# Gate: tracks VM readiness without any AAP dependency
+# VM create/destroy is fully independent of AAP availability
 resource "terraform_data" "vms_ready" {
   input = {
     vm_ids = [for vm in google_compute_instance.ubuntu_vms : vm.id]
   }
-  depends_on = [
-    time_sleep.wait_for_vms,
-    google_compute_instance_iam_member.ansible_oslogin_admin
-  ]
+  depends_on = [time_sleep.wait_for_vms]
 }
 
 resource "time_sleep" "wait_for_aap" {
@@ -132,8 +129,7 @@ resource "terraform_data" "trigger_patch" {
 
   depends_on = [
     time_sleep.wait_for_vms,
-    aap_host.vms,
-    google_compute_instance_iam_member.ansible_oslogin_admin
+    aap_host.vms
   ]
 }
 

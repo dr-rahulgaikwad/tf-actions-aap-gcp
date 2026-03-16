@@ -42,14 +42,20 @@ tasks:
       - terraform output -json
 
   add-ssh-ca:
-    desc: "Add Vault SSH CA to GCP OS Login"
+    desc: "Set vault_ssh_ca_public_key in HCP Terraform workspace"
     dir: bootstrap
     cmds:
       - |
         SSH_CA=$(terraform output -raw vault_ssh_ca_public_key)
-        echo "Adding SSH CA to GCP OS Login..."
-        gcloud compute os-login ssh-keys add --key="$SSH_CA" --ttl=365d
-        echo "✅ SSH CA added successfully"
+        echo ""
+        echo "=== Vault SSH CA Public Key ==="
+        echo "$SSH_CA"
+        echo ""
+        echo "Add this as a Terraform variable in HCP Terraform:"
+        echo "  Key:   vault_ssh_ca_public_key"
+        echo "  Value: (paste the key above)"
+        echo ""
+        echo "HCP Terraform → Workspace → Variables → Terraform Variables → Add"
 
   setup-aap:
     desc: "Setup AAP (manual steps guide)"
