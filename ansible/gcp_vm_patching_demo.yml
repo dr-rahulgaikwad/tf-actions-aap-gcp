@@ -164,13 +164,37 @@
       delay: 30
       until: upgrade_result is succeeded
 
-    - name: Debug patch result
-      debug:
-        msg: >-
-          {{ inventory_hostname }}: {{ 'changed' if upgrade_result.changed else 'no changes' }}
-          {% if upgrade_result.changed %}
-          | Packages upgraded: {{ upgrade_result.stdout | regex_findall('Unpacking ([^ ]+)') | join(', ') }}
-          {% endif %}
+    - name: Parse upgraded packages
+      set_fact:
+        patched_packages: "{{ upgrade_result.stdout | regex_findall('Unpacking ([^\\s:]+)') | unique }}"
+
+    - name: Store patch summary for this host
+      set_fact:
+        host_patch_summary:
+          host: "{{ inventory_hostname }}"
+          ip: "{{ ansible_host }}"
+          changed: "{{ upgrade_result.changed }}"
+          package_count: "{{ patched_packages | length }}"
+          packages: "{{ patched_packages }}"
+          reboot_required: "{{ (reboot_required.stat.exists | default(false)) }}"
+      when: reboot_required is defined
+
+    - name: Store patch summary (pre-reboot check)
+      set_fact:
+        host_patch_summary:
+          host: "{{ inventory_hostname }}"
+          ip: "{{ ansible_host }}"
+          changed: "{{ upgrade_result.changed }}"
+          package_count: "{{ patched_packages | length }}"
+          packages: "{{ patched_packages }}"
+          reboot_required: false
+      when: reboot_required is not defined
+
+    - name: Share summary with localhost
+      delegate_to: localhost
+      delegate_facts: true
+      set_fact:
+        patch_results: "{{ (hostvars['localhost'].patch_results | default([])) + [host_patch_summary] }}"
 
     - name: Check if reboot required
       stat:
@@ -194,10 +218,29 @@
   gather_facts: no
 
   tasks:
-    - name: Summary report
+    - name: Print per-host patch report
+      debug:
+        msg: >-
+          [{{ item.host }}] ({{ item.ip }})
+          | Patched: {{ item.changed }}
+          | Packages: {{ item.package_count }}
+          | Reboot required: {{ item.reboot_required }}
+          | {{ item.packages | join(', ') if item.changed else 'No changes' }}
+      loop: "{{ patch_results | default([]) }}"
+      loop_control:
+        label: "{{ item.host }}"
+
+    - name: Print overall summary
       debug:
         msg:
-          - "=== PATCHING COMPLETE ==="
-          - "Environment: {{ environment | default('unknown') }}"
-          - "Patch type: {{ patch_type | default('security') }}"
-          - "VMs targeted: {{ groups['gcp_vms'] | default([]) | length }}"
+          - "========================================"
+          - "         PATCH SUMMARY REPORT          "
+          - "========================================"
+          - "Environment  : {{ environment | default('unknown') }}"
+          - "Patch type   : {{ patch_type | default('security') }}"
+          - "Total VMs    : {{ patch_results | default([]) | length }}"
+          - "VMs patched  : {{ patch_results | default([]) | selectattr('changed', 'equalto', true) | list | length }}"
+          - "VMs unchanged: {{ patch_results | default([]) | selectattr('changed', 'equalto', false) | list | length }}"
+          - "Reboots needed: {{ patch_results | default([]) | selectattr('reboot_required', 'equalto', true) | list | length }}"
+          - "Total packages upgraded: {{ patch_results | default([]) | sum(attribute='package_count') }}"
+          - "========================================"
