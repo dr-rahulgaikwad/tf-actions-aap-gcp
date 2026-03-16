@@ -41,8 +41,7 @@ resource "aap_host" "vms" {
 
   lifecycle {
     create_before_destroy = false
-    # Ignore AAP-side changes (e.g. manual edits in AAP UI)
-    ignore_changes = [variables]
+    # No ignore_changes — variables (ansible_host IP) must always reflect current VM state
   }
 }
 

@@ -126,3 +126,4 @@ resource "google_compute_instance" "ubuntu_vms" {
 resource "time_sleep" "wait_for_vms" {
   depends_on      = [google_compute_instance.ubuntu_vms]
   create_duration = "120s" # Allow startup script to complete
+}
