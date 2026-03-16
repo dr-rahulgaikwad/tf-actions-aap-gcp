@@ -9,7 +9,7 @@ resource "aap_inventory" "vms" {
 
 resource "time_sleep" "wait_for_aap" {
   depends_on      = [aap_inventory.vms]
-  create_duration = "60s"
+  create_duration = "30s"
 }
 
 # Register VMs in AAP Inventory
@@ -31,6 +31,11 @@ resource "aap_host" "vms" {
     google_compute_instance.ubuntu_vms,
     google_compute_instance_iam_member.ansible_oslogin_admin
   ]
+
+  lifecycle {
+    # Force recreation when VMs change — avoids stale host IDs causing 502 on refresh
+    replace_triggered_by = [google_compute_instance.ubuntu_vms]
+  }
 }
 
 # VM Inventory for AAP Playbook
