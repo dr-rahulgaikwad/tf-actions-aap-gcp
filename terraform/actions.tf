@@ -51,35 +51,16 @@ resource "aap_host" "vms" {
 }
 
 locals {
-  vm_inventory = {
-    all = {
-      hosts = {
-        for vm in google_compute_instance.ubuntu_vms : vm.name => {
-          ansible_host = vm.network_interface[0].access_config[0].nat_ip
-          instance_id  = vm.instance_id
-          internal_ip  = vm.network_interface[0].network_ip
-          zone         = vm.zone
-        }
-      }
-      vars = {
-        gcp_project = var.gcp_project_id
-        gcp_region  = var.gcp_region
-        gcp_zone    = var.gcp_zone
-        environment = var.environment
-      }
-    }
-  }
-
   extra_vars = {
     patch_type          = "security"
     reboot_allowed      = true
     environment         = var.environment
-    vm_inventory        = local.vm_inventory
     gcp_project_id      = var.gcp_project_id
     gcp_zone            = var.gcp_zone
     terraform_workspace = terraform.workspace
     triggered_by        = "terraform-actions"
     # Do NOT add timestamp() — changes every plan, fires action on every run
+    # Do NOT add vm_inventory — AAP already has hosts via aap_host resources
   }
 }
 
@@ -126,10 +107,4 @@ output "action_patch_vms_ready" {
     inventory_name  = aap_inventory.vms.name
     environment     = var.environment
   }
-}
-
-output "action_patch_vms_inventory" {
-  description = "VM inventory passed to AAP"
-  value       = local.vm_inventory
-  sensitive   = false
 }
