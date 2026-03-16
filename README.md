@@ -202,6 +202,8 @@ cat /tmp/approle.json
 - SSH Username: `ubuntu` (default Linux user on Ubuntu GCP VMs)
 - Save
 
+> ⚠️ **Critical:** SSH Username in this credential must match the Linux user on the VM (`ubuntu` for Ubuntu images). The Vault SSH cert is signed with this as the principal — if it doesn't match the SSH login user, you get `Permission denied (publickey)`.
+
 **4.3 — Create Project**
 
 - AAP UI → Resources → Projects → Add
