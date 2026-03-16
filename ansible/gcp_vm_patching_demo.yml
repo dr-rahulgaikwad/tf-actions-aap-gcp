@@ -173,19 +173,20 @@
       set_fact:
         patched_packages: "{{ upgrade_result.stdout | regex_findall('Unpacking ([^\\s:]+)') | unique }}"
 
-    - name: Share patch summary with localhost
-      delegate_to: localhost
-      delegate_facts: true
-      set_fact:
-        patch_results: >-
-          {{ (hostvars['localhost'].patch_results | default([])) + [{
-            'host': inventory_hostname,
-            'ip': ansible_host,
-            'changed': upgrade_result.changed,
-            'package_count': patched_packages | length,
-            'packages': patched_packages,
-            'reboot_required': reboot_required.stat.exists
-          }] }}
+    - name: Store per-host patch result
+      set_stats:
+        data:
+          patch_results: >-
+            {{ (patch_results | default([])) + [{
+              'host': inventory_hostname,
+              'ip': ansible_host,
+              'changed': upgrade_result.changed,
+              'package_count': patched_packages | length,
+              'packages': patched_packages,
+              'reboot_required': reboot_required.stat.exists
+            }] }}
+        aggregate: yes
+        per_host: no
 
     - name: Reboot if required and allowed
       reboot:
@@ -228,5 +229,7 @@
           - "VMs patched  : {{ patch_results | default([]) | selectattr('changed', 'equalto', true) | list | length }}"
           - "VMs unchanged: {{ patch_results | default([]) | selectattr('changed', 'equalto', false) | list | length }}"
           - "Reboots needed: {{ patch_results | default([]) | selectattr('reboot_required', 'equalto', true) | list | length }}"
+          - "Total packages upgraded: {{ patch_results | default([]) | sum(attribute='package_count') }}"
+          - "========================================"
           - "Total packages upgraded: {{ patch_results | default([]) | sum(attribute='package_count') }}"
           - "========================================"
