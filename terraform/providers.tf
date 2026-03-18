@@ -62,15 +62,17 @@ provider "google" {
 }
 
 # Dynamic AAP Credentials from Vault
+# Skipped when enable_aap=false (e.g. during destroy when AAP is unavailable)
 data "vault_kv_secret_v2" "aap_creds" {
+  count = var.enable_aap ? 1 : 0
   mount = "secret"
   name  = "aap/credentials"
 }
 
 # Ansible Automation Platform Provider - Dynamic Credentials
 provider "aap" {
-  host                 = data.vault_kv_secret_v2.aap_creds.data["hostname"]
-  username             = data.vault_kv_secret_v2.aap_creds.data["username"]
-  password             = data.vault_kv_secret_v2.aap_creds.data["password"]
+  host                 = var.enable_aap ? data.vault_kv_secret_v2.aap_creds[0].data["hostname"] : "http://localhost"
+  username             = var.enable_aap ? data.vault_kv_secret_v2.aap_creds[0].data["username"] : "disabled"
+  password             = var.enable_aap ? data.vault_kv_secret_v2.aap_creds[0].data["password"] : "disabled"
   insecure_skip_verify = var.aap_insecure_skip_verify
 }
