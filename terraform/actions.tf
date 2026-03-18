@@ -24,13 +24,12 @@ removed {
 }
 
 data "vault_kv_secret_v2" "aap_approle" {
-  count = var.enable_aap ? 1 : 0
   mount = "secret"
   name  = "aap/approle"
 }
 
 locals {
-  extra_vars = var.enable_aap ? {
+  extra_vars = {
     # VM IPs — playbook uses add_host to build inventory dynamically
     vm_hosts = { for vm in google_compute_instance.ubuntu_vms : vm.name => vm.network_interface[0].access_config[0].nat_ip }
 
@@ -42,8 +41,8 @@ locals {
     vault_addr      = var.vault_addr
     vault_namespace = var.vault_namespace
     vault_ssh_role  = "aap-ssh"
-    vault_role_id   = data.vault_kv_secret_v2.aap_approle[0].data["role_id"]
-    vault_secret_id = data.vault_kv_secret_v2.aap_approle[0].data["secret_id"]
+    vault_role_id   = data.vault_kv_secret_v2.aap_approle.data["role_id"]
+    vault_secret_id = data.vault_kv_secret_v2.aap_approle.data["secret_id"]
 
     # Patch config
     patch_type     = "security"
@@ -51,7 +50,7 @@ locals {
     environment    = var.environment
     gcp_project_id = var.gcp_project_id
     gcp_zone       = var.gcp_zone
-  } : {}
+  }
 }
 
 action "aap_job_launch" "patch_vms" {

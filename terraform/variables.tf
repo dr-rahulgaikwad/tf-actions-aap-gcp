@@ -177,12 +177,6 @@ variable "aap_insecure_skip_verify" {
   default     = false
 }
 
-variable "enable_aap" {
-  description = "Set to false to skip AAP provider initialization (e.g. during destroy when AAP is unavailable)."
-  type        = bool
-  default     = true
-}
-
 variable "vault_ssh_ca_public_key" {
   description = "Vault SSH CA public key written to VM sshd TrustedUserCAKeys at boot (from: cd bootstrap && terraform output -raw vault_ssh_ca_public_key)"
   type        = string
