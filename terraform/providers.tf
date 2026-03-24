@@ -1,6 +1,6 @@
 # Terraform Configuration
 terraform {
-  required_version = ">= 1.7.0"
+  required_version = ">= 1.10.0"
 
   # HCP Terraform Cloud backend configuration
   cloud {
@@ -17,7 +17,7 @@ terraform {
     }
     vault = {
       source  = "hashicorp/vault"
-      version = "~> 4.0"
+      version = "~> 4.4"
     }
     aap = {
       source  = "ansible/aap"
@@ -45,10 +45,8 @@ provider "vault" {
 }
 
 # Dynamic GCP Access Token from Vault
-# Vault GCP secrets engine generates short-lived access tokens
-# Token TTL: 1 hour (configured in Vault GCP roleset)
-# No static service account keys required
-data "vault_generic_secret" "gcp_token" {
+# Ephemeral: value is never written to state or plan files
+ephemeral "vault_generic_secret" "gcp_token" {
   path = "gcp/token/${var.vault_gcp_roleset}"
 }
 
@@ -56,21 +54,22 @@ data "vault_generic_secret" "gcp_token" {
 # Uses access token from Vault instead of static credentials
 # Token automatically expires after 1 hour
 provider "google" {
-  access_token = data.vault_generic_secret.gcp_token.data["token"]
+  access_token = ephemeral.vault_generic_secret.gcp_token.data["token"]
   project      = var.gcp_project_id
   region       = var.gcp_region
 }
 
 # Dynamic AAP Credentials from Vault
-data "vault_kv_secret_v2" "aap_creds" {
+# Ephemeral: value is never written to state or plan files
+ephemeral "vault_kv_secret_v2" "aap_creds" {
   mount = "secret"
   name  = "aap/credentials"
 }
 
 # Ansible Automation Platform Provider - Dynamic Credentials
 provider "aap" {
-  host                 = data.vault_kv_secret_v2.aap_creds.data["hostname"]
-  username             = data.vault_kv_secret_v2.aap_creds.data["username"]
-  password             = data.vault_kv_secret_v2.aap_creds.data["password"]
+  host                 = ephemeral.vault_kv_secret_v2.aap_creds.data["hostname"]
+  username             = ephemeral.vault_kv_secret_v2.aap_creds.data["username"]
+  password             = ephemeral.vault_kv_secret_v2.aap_creds.data["password"]
   insecure_skip_verify = var.aap_insecure_skip_verify
 }

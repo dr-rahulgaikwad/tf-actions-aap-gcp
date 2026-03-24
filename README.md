@@ -1,4 +1,4 @@
-# Terraform Actions + AAP + GCP VM Patching
+# From IaC to InfraOps: Automating Day-2 Operations with Terraform Actions and AAP
 
 Production-ready automated VM patching with zero static credentials. A git push provisions GCP VMs, configures SSH trust via Vault CA, and automatically triggers Ansible patching — no keys, no secrets in code, no manual steps.
 
