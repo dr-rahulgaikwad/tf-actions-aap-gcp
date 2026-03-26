@@ -23,7 +23,7 @@ removed {
   lifecycle { destroy = false }
 }
 
-ephemeral "vault_kv_secret_v2" "aap_approle" {
+data "vault_kv_secret_v2" "aap_approle" {
   mount = "secret"
   name  = "aap/approle"
 }
@@ -38,8 +38,8 @@ locals {
     vault_addr      = var.vault_addr
     vault_namespace = var.vault_namespace
     vault_ssh_role  = "aap-ssh"
-    vault_role_id   = ephemeral.vault_kv_secret_v2.aap_approle.data["role_id"]
-    vault_secret_id = ephemeral.vault_kv_secret_v2.aap_approle.data["secret_id"]
+    vault_role_id   = data.vault_kv_secret_v2.aap_approle.data["role_id"]
+    vault_secret_id = data.vault_kv_secret_v2.aap_approle.data["secret_id"]
 
     # Patch config
     patch_type     = "security"
