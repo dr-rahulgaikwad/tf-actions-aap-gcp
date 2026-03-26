@@ -23,26 +23,23 @@ removed {
   lifecycle { destroy = false }
 }
 
-data "vault_kv_secret_v2" "aap_approle" {
+ephemeral "vault_kv_secret_v2" "aap_approle" {
   mount = "secret"
   name  = "aap/approle"
 }
 
 locals {
   extra_vars = {
-    # VM IPs — playbook uses add_host to build inventory dynamically
     vm_hosts = { for vm in google_compute_instance.ubuntu_vms : vm.name => vm.network_interface[0].access_config[0].nat_ip }
 
-    # SSH user
     ansible_user   = var.ansible_user
     vault_ssh_user = var.ansible_user
 
-    # Vault SSH CA — passed directly so AAP needs no credential config
     vault_addr      = var.vault_addr
     vault_namespace = var.vault_namespace
     vault_ssh_role  = "aap-ssh"
-    vault_role_id   = data.vault_kv_secret_v2.aap_approle.data["role_id"]
-    vault_secret_id = data.vault_kv_secret_v2.aap_approle.data["secret_id"]
+    vault_role_id   = ephemeral.vault_kv_secret_v2.aap_approle.data["role_id"]
+    vault_secret_id = ephemeral.vault_kv_secret_v2.aap_approle.data["secret_id"]
 
     # Patch config
     patch_type     = "security"

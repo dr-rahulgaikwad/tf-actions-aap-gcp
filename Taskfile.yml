@@ -18,13 +18,14 @@ tasks:
       - |
         if [ ! -f terraform.tfvars ]; then
           cp terraform.tfvars.example terraform.tfvars
-          echo "Created bootstrap/terraform.tfvars — edit it with your values, then re-run: task bootstrap"
+          echo "Created bootstrap/terraform.tfvars - edit it with your values, then re-run: task bootstrap"
           exit 0
         fi
       - terraform init
       - terraform apply
-      - echo ""
-      - echo "Bootstrap complete. Next: task add-ssh-ca"
+      - |
+        echo ""
+        echo "Bootstrap complete. Next - run: task add-ssh-ca"
 
   bootstrap-output:
     desc: "Show bootstrap outputs (AppRole creds, SSH CA key, next steps)"
@@ -100,37 +101,43 @@ tasks:
       - task: validate-gcp
       - task: validate-vault
       - task: validate-terraform
-      - echo "✓ All validations passed"
+      - |
+        echo "All validations passed"
 
   validate-tools:
     desc: "Check required CLIs are installed"
     cmds:
-      - command -v gcloud >/dev/null 2>&1 || (echo "✗ gcloud not found — brew install google-cloud-sdk" && exit 1)
-      - command -v vault  >/dev/null 2>&1 || (echo "✗ vault not found  — brew install vault" && exit 1)
-      - command -v task   >/dev/null 2>&1 || (echo "✗ task not found   — brew install go-task" && exit 1)
-      - echo "✓ Tools OK"
+      - |
+        command -v gcloud >/dev/null 2>&1 || (echo "gcloud not found - brew install google-cloud-sdk" && exit 1)
+        command -v vault  >/dev/null 2>&1 || (echo "vault not found - brew install vault" && exit 1)
+        command -v task   >/dev/null 2>&1 || (echo "task not found - brew install go-task" && exit 1)
+        echo "Tools OK"
 
   validate-gcp:
     desc: "Check GCP authentication and project"
     cmds:
-      - gcloud auth list --filter=status:ACTIVE --format="value(account)" | grep -q . || (echo "✗ Not authenticated — run: gcloud auth login" && exit 1)
-      - gcloud config get-value project | grep -q . || (echo "✗ No project set — run: gcloud config set project PROJECT_ID" && exit 1)
-      - echo "✓ GCP OK (project: $(gcloud config get-value project))"
+      - |
+        gcloud auth list --filter=status:ACTIVE --format="value(account)" | grep -q . || (echo "Not authenticated - run: gcloud auth login" && exit 1)
+        gcloud config get-value project | grep -q . || (echo "No project set - run: gcloud config set project PROJECT_ID" && exit 1)
+        echo "GCP OK (project: $(gcloud config get-value project))"
 
   validate-vault:
     desc: "Check Vault connectivity and authentication"
     cmds:
-      - vault status >/dev/null || (echo "✗ Cannot reach Vault — check VAULT_ADDR" && exit 1)
-      - vault token lookup >/dev/null || (echo "✗ Not authenticated to Vault — run: vault login" && exit 1)
-      - echo "✓ Vault OK"
+      - |
+        vault status >/dev/null || (echo "Cannot reach Vault - check VAULT_ADDR" && exit 1)
+        vault token lookup >/dev/null || (echo "Not authenticated to Vault - run: vault login" && exit 1)
+        echo "Vault OK"
 
   validate-terraform:
     desc: "Check Terraform formatting and syntax"
     dir: "{{.TERRAFORM_DIR}}"
     cmds:
-      - terraform fmt -check -recursive || (echo "⚠ Run 'terraform fmt -recursive' to fix formatting" && exit 1)
+      - |
+        terraform fmt -check -recursive || (echo "Run terraform fmt -recursive to fix formatting" && exit 1)
       - terraform validate
-      - echo "✓ Terraform OK"
+      - |
+        echo "Terraform OK"
 
   # ── Testing ───────────────────────────────────────────────────────────────
 
@@ -139,14 +146,17 @@ tasks:
     cmds:
       - task: test-vault
       - task: test-vms
-      - echo "✓ All tests passed"
+      - |
+        echo "All tests passed"
 
   test-vault:
     desc: "Test Vault GCP token and AAP credential access"
     cmds:
-      - echo "Testing GCP token generation..."
+      - |
+        echo "Testing GCP token generation..."
       - vault read gcp/token/terraform-provisioner
-      - echo "Testing AAP credentials..."
+      - |
+        echo "Testing AAP credentials..."
       - vault kv get secret/aap/credentials
 
   test-vms:
@@ -162,4 +172,5 @@ tasks:
       - rm -rf {{.TERRAFORM_DIR}}/.terraform
       - rm -f {{.TERRAFORM_DIR}}/.terraform.lock.hcl
       - rm -f /tmp/aap_ssh_key /tmp/aap_ssh_key.pub /tmp/aap_ssh_key-cert.pub
-      - echo "✓ Cleaned"
+      - |
+        echo "Cleaned"

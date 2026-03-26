@@ -17,7 +17,7 @@ terraform {
     }
     vault = {
       source  = "hashicorp/vault"
-      version = "~> 4.4"
+      version = "~> 5.0"
     }
     aap = {
       source  = "ansible/aap"
@@ -45,16 +45,14 @@ provider "vault" {
 }
 
 # Dynamic GCP Access Token from Vault
-# Ephemeral: value is never written to state or plan files
-ephemeral "vault_generic_secret" "gcp_token" {
+# GCP secrets engine has no ephemeral resource — data source is required here
+data "vault_generic_secret" "gcp_token" {
   path = "gcp/token/${var.vault_gcp_roleset}"
 }
 
 # Google Cloud Provider - Dynamic Credentials
-# Uses access token from Vault instead of static credentials
-# Token automatically expires after 1 hour
 provider "google" {
-  access_token = ephemeral.vault_generic_secret.gcp_token.data["token"]
+  access_token = data.vault_generic_secret.gcp_token.data["token"]
   project      = var.gcp_project_id
   region       = var.gcp_region
 }
