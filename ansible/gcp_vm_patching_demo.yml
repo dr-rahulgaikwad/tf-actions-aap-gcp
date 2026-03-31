@@ -7,14 +7,14 @@
   tasks:
     - name: Authenticate to Vault via AppRole
       uri:
-        url: "{{ vault_addr }}/v1/auth/approle/login"
+        url: "{{ lookup('env', 'VAULT_ADDR') }}/v1/auth/approle/login"
         method: POST
         headers:
-          X-Vault-Namespace: "{{ vault_namespace | default('admin') }}"
+          X-Vault-Namespace: "{{ lookup('env', 'VAULT_NAMESPACE') | default('admin') }}"
         body_format: json
         body:
-          role_id: "{{ vault_role_id }}"
-          secret_id: "{{ vault_secret_id }}"
+          role_id: "{{ lookup('env', 'VAULT_ROLE_ID') }}"
+          secret_id: "{{ lookup('env', 'VAULT_SECRET_ID') }}"
         validate_certs: no
         status_code: 200
       register: vault_login
@@ -50,11 +50,11 @@
 
     - name: Sign public key with Vault SSH CA
       uri:
-        url: "{{ vault_addr }}/v1/ssh/sign/{{ vault_ssh_role | default('aap-ssh') }}"
+        url: "{{ lookup('env', 'VAULT_ADDR') }}/v1/ssh/sign/{{ lookup('env', 'VAULT_SSH_ROLE') | default('aap-ssh') }}"
         method: POST
         headers:
           X-Vault-Token: "{{ vault_token }}"
-          X-Vault-Namespace: "{{ vault_namespace | default('admin') }}"
+          X-Vault-Namespace: "{{ lookup('env', 'VAULT_NAMESPACE') | default('admin') }}"
         body_format: json
         body:
           public_key: "{{ ssh_pubkey.content | b64decode }}"
@@ -87,6 +87,14 @@
         groups: gcp_vms
         ansible_host: "{{ item.value }}"
         ansible_user: "{{ ansible_user | default('ubuntu') }}"
+        ansible_ssh_private_key_file: /tmp/aap_ssh_key
+        ansible_ssh_common_args: >-
+          -o CertificateFile=/tmp/aap_ssh_key-cert.pub
+          -o StrictHostKeyChecking=no
+          -o UserKnownHostsFile=/dev/null
+          -o ConnectTimeout=30
+          -o ServerAliveInterval=10
+          -o ServerAliveCountMax=6
       loop: "{{ vm_hosts | dict2items }}"
       when: vm_hosts is defined
 
@@ -103,14 +111,6 @@
     reboot_timeout: 600
     patch_type: "{{ patch_type | default('security') }}"
     reboot_allowed: "{{ reboot_allowed | default(true) }}"
-    ansible_ssh_private_key_file: /tmp/aap_ssh_key
-    ansible_ssh_common_args: >-
-      -o CertificateFile=/tmp/aap_ssh_key-cert.pub
-      -o StrictHostKeyChecking=no
-      -o UserKnownHostsFile=/dev/null
-      -o ConnectTimeout=30
-      -o ServerAliveInterval=10
-      -o ServerAliveCountMax=6
     ansible_become_exe: /usr/bin/sudo
     ansible_become_flags: "-H -S -n"
 

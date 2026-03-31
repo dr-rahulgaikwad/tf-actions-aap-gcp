@@ -3,7 +3,7 @@
 # Pattern from pablogd-hashi/promptOPS-tf-aap:
 # - No aap_host resources (avoids parallel AAP refresh on every plan)
 # - No AAP inventory used by playbook (playbook builds its own via add_host)
-# - Vault creds passed via extra_vars (no AAP credential config needed)
+# - Vault creds injected via AAP custom credential (never in state or extra_vars)
 # - wait_for_completion=false (doesn't block apply, avoids sandbox timeouts)
 
 # Remove stale resources from remote state — these were deleted from config
@@ -23,30 +23,20 @@ removed {
   lifecycle { destroy = false }
 }
 
-data "vault_kv_secret_v2" "aap_approle" {
-  mount = "secret"
-  name  = "aap/approle"
-}
-
 locals {
   extra_vars = {
+    # VM inventory — non-sensitive, required for dynamic add_host in playbook
     vm_hosts = { for vm in google_compute_instance.ubuntu_vms : vm.name => vm.network_interface[0].access_config[0].nat_ip }
 
-    ansible_user   = var.ansible_user
-    vault_ssh_user = var.ansible_user
-
-    vault_addr      = var.vault_addr
-    vault_namespace = var.vault_namespace
-    vault_ssh_role  = "aap-ssh"
-    vault_role_id   = data.vault_kv_secret_v2.aap_approle.data["role_id"]
-    vault_secret_id = data.vault_kv_secret_v2.aap_approle.data["secret_id"]
-
-    # Patch config
+    # Patch config — non-sensitive operational vars
     patch_type     = "security"
     reboot_allowed = true
     environment    = var.environment
     gcp_project_id = var.gcp_project_id
     gcp_zone       = var.gcp_zone
+
+    # ansible_user / vault_ssh_user are injected by the AAP "Vault SSH Certificate"
+    # custom credential via its extra_vars injector — no need to duplicate here
   }
 }
 
