@@ -4,7 +4,7 @@ Production-ready automated VM patching with zero static credentials. A git push 
 
 [![Security](https://img.shields.io/badge/Static%20Credentials-Zero-brightgreen)]()
 [![Automation](https://img.shields.io/badge/Deployment-60%20min-blue)]()
-[![Version](https://img.shields.io/badge/Version-3.0.0-orange)]()
+[![Version](https://img.shields.io/badge/Version-4.0.0-orange)]()
 
 ---
 
@@ -23,7 +23,7 @@ flowchart LR
         subgraph VAULT ["🔐 HCP Vault"]
             V1["JWT Auth\n⏱ 20 min"]
             V2["GCP Secrets\n⏱ 1 hr"]
-            V3["KV — AAP creds\n+ AppRole"]
+            V3["KV — AAP creds\nephemeral"]
             V4["SSH CA\n⏱ 30 min"]
         end
     end
@@ -33,6 +33,7 @@ flowchart LR
     end
 
     subgraph AAP ["🤖 Ansible Automation Platform"]
+        CRED["Vault SSH Certificate\ncustom credential\n(env var injection)"]
         P1["Play 1\nAppRole → sign cert\nbuild inventory"]
         P2["Play 2\napt dist-upgrade\nreboot if needed"]
         P3["Play 3\nPatch summary\nreport"]
@@ -44,9 +45,10 @@ flowchart LR
     PLAN -->|JWT| V1
     V1 --> V2 & V3
     V2 -->|GCP token| GCP
-    V3 -->|creds + AppRole\nas extra_vars| ACTION
+    V3 -->|ephemeral creds| ACTION
     GCP -->|VMs ready| ACTION
-    ACTION -->|job launch| P1
+    ACTION -->|job launch\nnon-secret extra_vars only| P1
+    CRED -->|VAULT_ROLE_ID\nVAULT_SECRET_ID\nas env vars| P1
     P1 -->|AppRole login| V4
     V4 -->|signed cert| P1
     P1 -->|SSH + cert| P2
@@ -59,26 +61,33 @@ flowchart LR
     style VAULT fill:#fff8e8,stroke:#e67e22
     style GCP fill:#e8f4ff,stroke:#1a73e8
     style AAP fill:#f0e8ff,stroke:#8e44ad
-    style PLAN fill:#e8f8ff,stroke:#0099cc
-    style ACTION fill:#e8f8ff,stroke:#0099cc
-    style V1 fill:#fff8e8,stroke:#e67e22
-    style V2 fill:#fff8e8,stroke:#e67e22
-    style V3 fill:#fff8e8,stroke:#e67e22
-    style V4 fill:#fff8e8,stroke:#e67e22
-    style VM fill:#e8f4ff,stroke:#1a73e8
-    style P1 fill:#f0e8ff,stroke:#8e44ad
-    style P2 fill:#f0e8ff,stroke:#8e44ad
-    style P3 fill:#f0e8ff,stroke:#8e44ad
 ```
 
-Every credential is dynamically generated with a short TTL. Nothing is stored in code or state.
+Every credential is dynamically generated with a short TTL. Nothing is stored in code or Terraform state.
 
-| Credential | Source | TTL |
-|---|---|---|
-| GCP access token | Vault GCP secrets engine | 1 hour |
-| AAP credentials | Vault KV | stored, rotated manually |
-| SSH certificate | Vault SSH CA | 30 min |
-| Vault token (TFC) | JWT auth | 20 min |
+| Credential | Source | TTL | In State? |
+|---|---|---|---|
+| GCP access token | Vault GCP secrets engine | 1 hour | Yes (no ephemeral resource available) |
+| AAP credentials | Vault KV — ephemeral resource | session only | No |
+| SSH certificate | Vault SSH CA | 30 min | No |
+| Vault token (TFC) | JWT auth | 20 min | No |
+| AppRole role_id / secret_id | AAP custom credential (env vars) | 10 hours | No |
+
+---
+
+## Security design
+
+**Secrets never in `extra_vars`**
+
+The AAP provider's `extra_vars` field is not write-only and cannot accept ephemeral values — anything passed there is persisted in AAP job state and Terraform state. All Vault AppRole credentials (`VAULT_ROLE_ID`, `VAULT_SECRET_ID`) are injected exclusively as environment variables via the AAP custom credential type, which encrypts them at rest and never exposes them in job arguments or logs.
+
+**`extra_vars` contains only non-sensitive operational data:**
+- `vm_hosts` — VM name → IP map (built at apply time)
+- `patch_type`, `reboot_allowed`, `environment`, `gcp_project_id`, `gcp_zone`
+
+**SSH connection args set at host level**
+
+`ansible_ssh_private_key_file` and `ansible_ssh_common_args` (including `-o CertificateFile=`) are set via `add_host` in Play 1, not in play `vars`. This prevents the AAP credential injector's `extra_vars` (which has highest Ansible precedence) from overriding the certificate file argument.
 
 ---
 
@@ -136,6 +145,8 @@ aap_password       = "your-aap-password"
 tfc_organization   = "your-tfc-org"
 tfc_workspace_name = "tf-actions-vault-aap-gcp"
 ```
+
+> `bootstrap/terraform.tfvars` is gitignored. Never commit it.
 
 Bootstrap creates automatically:
 - Vault JWT auth for HCP Terraform (20-min TTL)
@@ -215,6 +226,8 @@ extra_vars:
   vault_ssh_user: '{{ ssh_user }}'
 ```
 
+> Secrets are injected as env vars only. `extra_vars` carries only the non-sensitive SSH username.
+
 **4.2 — Create Credential**
 
 AAP UI → Resources → Credentials → Add
@@ -222,8 +235,6 @@ AAP UI → Resources → Credentials → Add
 - Vault Address: your Vault URL
 - AppRole creds: `task bootstrap-output`
 - SSH Username: `ubuntu`
-
-> SSH Username must be `ubuntu` — this is the principal the Vault SSH cert is signed for.
 
 **4.3 — Create Project**
 
@@ -235,22 +246,24 @@ AAP UI → Resources → Projects → Add
 
 AAP UI → Resources → Templates → Add Job Template
 - Name: `Patch GCP VMs`
-- Inventory: `demo-gcp-vms` (auto-created by Terraform)
+- Inventory: `demo-gcp-vms`
 - Playbook: `ansible/gcp_vm_patching_demo.yml`
 - Credentials: `Vault SSH Certificate`
 - Variables: enable Prompt on launch
 - Note the Template ID from the URL
 
+> Do not pre-populate Extra Variables on the Job Template with vault credentials. Terraform sends only non-sensitive vars at runtime.
+
 **4.5 — Set remaining HCP Terraform variables**
 
-| Variable | How to set |
+| Variable | Value |
 |---|---|
-| `vault_ssh_ca_public_key` | Step 3 above |
+| `vault_ssh_ca_public_key` | From Step 3 |
 | `ansible_user` | `ubuntu` |
 | `aap_job_template_id` | Template ID from step 4.4 |
 | `aap_oidc_issuer_url` | Your AAP server URL |
 | `aap_oidc_repository` | `your-org/tf-actions-aap-gcp` |
-| `aap_server_ip` | AAP server public IP (production) |
+| `aap_server_ip` | AAP server public IP (production only) |
 | `aap_insecure_skip_verify` | `true` for demo, `false` for production |
 
 All other variables are auto-set by bootstrap.
@@ -269,24 +282,17 @@ Monitor the run in HCP Terraform. After apply:
 ### Step 6 — Verify (5 min)
 
 ```bash
-task test-vault   # Vault connectivity and credentials
-task test-vms     # VMs running in GCP
+task validate     # Tools, GCP auth, Vault auth, Terraform config
+task test         # Vault connectivity, VMs running, state secret check
 ```
-
-Check AAP UI → Resources → Jobs for the patch run and summary report.
 
 ---
 
 ## Patch Summary Report
 
-Each patching run produces a per-host report and an overall summary in the AAP job output:
-
 ```
 [ubuntu-vm-1] (34.31.144.26) | Patched: True | Packages: 52 | Reboot required: True
-  libssl1.1, systemd, libc6, libpam0g, libgnutls30, ...
-
 [ubuntu-vm-2] (34.31.144.27) | Patched: True | Packages: 48 | Reboot required: False
-  libssl1.1, systemd, libc6, ...
 
 ========================================
          PATCH SUMMARY REPORT
@@ -315,8 +321,9 @@ task validate         # Validate tools, GCP auth, Vault auth, Terraform config
 task deploy           # git add/commit/push to trigger a run
 
 task test             # Run all post-deployment tests
-task test-vault       # Test Vault GCP token and AAP credential access
+task test-vault       # Test Vault GCP token and AAP credential path
 task test-vms         # List running GCP VMs
+task check-state      # Verify no secrets in Terraform state
 
 task clean            # Remove local Terraform cache and temp files
 ```
@@ -327,20 +334,23 @@ task clean            # Remove local Terraform cache and temp files
 
 **Zero static credentials**
 - No credentials in code or Terraform state
-- No static SSH keys
+- No static SSH keys — Vault-signed ephemeral certificates only (30-min TTL)
 - No service account keys in AAP
-- All credentials dynamically generated with TTL enforcement
+- AppRole credentials injected as env vars by AAP custom credential — never in `extra_vars`, never in state
 
 **Production hardening**
 
 ```hcl
-# terraform.tfvars
+# terraform.tfvars (set in HCP Terraform workspace)
 environment              = "production"
 aap_server_ip            = "1.2.3.4"   # Restricts SSH firewall to AAP IP only
 aap_insecure_skip_verify = false        # Requires valid TLS cert on AAP
 ```
 
-Remove `AAP_INSECURE_SKIP_VERIFY` from HCP Terraform environment variables in production.
+**Verify state is clean after every apply:**
+```bash
+task check-state
+```
 
 **Audit trail**
 - Vault audit logs: all token generation and SSH certificate signing
@@ -354,7 +364,7 @@ Remove `AAP_INSECURE_SKIP_VERIFY` from HCP Terraform environment variables in pr
 **Vault JWT auth fails**
 ```bash
 vault read auth/jwt/role/terraform-cloud
-# Check TFC_VAULT_BACKED_JWT_AUTH=true and TFC_VAULT_PROVIDER_AUTH=true in HCP TF workspace
+# Verify TFC_VAULT_BACKED_JWT_AUTH=true and TFC_VAULT_PROVIDER_AUTH=true in HCP TF workspace
 ```
 
 **GCP token generation fails**
@@ -363,21 +373,27 @@ vault read gcp/token/terraform-provisioner
 gcloud projects get-iam-policy PROJECT_ID  # Check vault-admin SA permissions
 ```
 
+**AAP job fails with `vault_addr is undefined`**
+
+The Job Template has stale vault variables in its Extra Variables field from a previous run. Clear them:
+- AAP UI → Job Templates → your template → Edit → Extra Variables → remove any `vault_addr`, `vault_namespace`, `vault_role_id`, `vault_secret_id` entries → Save
+
 **SSH connection fails**
 ```bash
-# Verify Vault SSH CA is in sshd config on the VM
-gcloud compute ssh VM_NAME --command="cat /etc/ssh/sshd_config | grep TrustedUserCAKeys"
+# Verify Vault SSH CA is trusted by sshd on the VM
+gcloud compute ssh VM_NAME --command="grep TrustedUserCAKeys /etc/ssh/sshd_config"
 
-# Test AppRole auth manually
+# Test AppRole auth
 vault write auth/approle/login role_id=ROLE_ID secret_id=SECRET_ID
 
 # Test cert signing
 vault write ssh/sign/aap-ssh public_key=@~/.ssh/id_ed25519.pub
 ```
 
-**Patch summary missing**
-- Ensure AAP project is synced after any playbook changes (AAP UI → Projects → sync)
-- `set_stats` with `aggregate: yes, per_host: no` is used to accumulate results across hosts — verify AAP execution environment has `ansible.builtin.set_stats` available
+**GCP re-auth required (invalid_rapt)**
+```bash
+gcloud auth application-default login
+```
 
 ---
 
@@ -391,17 +407,17 @@ vault write ssh/sign/aap-ssh public_key=@~/.ssh/id_ed25519.pub
 │   ├── variables.tf
 │   ├── outputs.tf
 │   └── terraform.tfvars.example
-├── terraform/                          # Main infrastructure
+├── terraform/                          # Main infrastructure (runs via HCP Terraform)
 │   ├── main.tf                         # VMs + Workload Identity
-│   ├── providers.tf                    # Dynamic credentials via Vault
+│   ├── providers.tf                    # Dynamic credentials via Vault (ephemeral)
 │   ├── actions.tf                      # Terraform Actions → AAP trigger
 │   ├── variables.tf
 │   ├── outputs.tf
 │   └── terraform.tfvars.example
 ├── ansible/
-│   └── gcp_vm_patching_demo.yml        # Patching playbook with summary report
+│   └── gcp_vm_patching_demo.yml        # Patching playbook (3 plays + summary report)
 └── scripts/
-    └── aap-vault-ssh-credential.json   # AAP credential type definition
+    └── aap-vault-ssh-credential.json   # AAP custom credential type definition
 ```
 
 ---
@@ -415,8 +431,6 @@ vault write ssh/sign/aap-ssh public_key=@~/.ssh/id_ed25519.pub
 | Vault, Workload Identity | Free tier |
 | **Total** | **~$55** |
 
-Reduce cost: preemptible VMs (-70%), scheduled shutdown (-50%), committed use (-57%).
-
 ---
 
 ## Resources
@@ -427,6 +441,7 @@ Reduce cost: preemptible VMs (-70%), scheduled shutdown (-50%), committed use (-
 - [Vault SSH CA](https://developer.hashicorp.com/vault/docs/secrets/ssh/signed-ssh-certificates)
 - [GCP Workload Identity Federation](https://cloud.google.com/iam/docs/workload-identity-federation)
 - [AAP Provider](https://registry.terraform.io/providers/ansible/aap/latest/docs)
+- [AAP Credential Types](https://docs.ansible.com/automation-controller/latest/html/userguide/credential_types.html)
 
 ---
 
@@ -436,5 +451,4 @@ MIT — see [LICENSE](./LICENSE)
 
 ---
 
-**v3.0.0** · Dr. Rahul Gaikwad · HashiCorp Solutions Architect
-
+**v4.0.0** · Dr. Rahul Gaikwad · HashiCorp Solutions Architect

@@ -146,6 +146,7 @@ tasks:
     cmds:
       - task: test-vault
       - task: test-vms
+      - task: check-state
       - |
         echo "All tests passed"
 
@@ -156,13 +157,34 @@ tasks:
         echo "Testing GCP token generation..."
       - vault read gcp/token/terraform-provisioner
       - |
-        echo "Testing AAP credentials..."
-      - vault kv get secret/aap/credentials
+        echo "Testing AAP credential path exists..."
+      - vault kv metadata get secret/aap/credentials
 
   test-vms:
     desc: "List running GCP VMs managed by Terraform"
     cmds:
       - gcloud compute instances list --filter="labels.managed_by=terraform" --format="table(name,zone,status,networkInterfaces[0].accessConfigs[0].natIP)"
+
+  check-state:
+    desc: "Verify no secrets are stored in Terraform state"
+    dir: "{{.TERRAFORM_DIR}}"
+    cmds:
+      - |
+        echo "Checking for secrets in Terraform state..."
+        STATE=$(terraform state pull 2>/dev/null)
+        FOUND=0
+        for key in role_id secret_id aap_password private_key access_token; do
+          if echo "$STATE" | grep -q "\"$key\""; then
+            echo "WARNING: '$key' found in state"
+            FOUND=1
+          fi
+        done
+        if [ $FOUND -eq 0 ]; then
+          echo "State check passed — no secrets detected"
+        else
+          echo "Review the above warnings"
+          exit 1
+        fi
 
   # ── Cleanup ───────────────────────────────────────────────────────────────
 

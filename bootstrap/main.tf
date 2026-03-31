@@ -40,7 +40,7 @@ resource "vault_jwt_auth_backend" "tfc" {
 }
 
 resource "vault_policy" "terraform_provisioner" {
-  name = "terraform-provisioner"
+  name   = "terraform-provisioner"
   policy = <<EOT
 # GCP token generation
 path "gcp/token/${var.vault_gcp_roleset}" { capabilities = ["read"] }
@@ -58,8 +58,8 @@ resource "vault_jwt_auth_backend_role" "tfc" {
   role_name      = "terraform-cloud"
   token_policies = [vault_policy.terraform_provisioner.name]
 
-  bound_audiences    = ["vault.workload.identity"]
-  bound_claims_type  = "glob"
+  bound_audiences   = ["vault.workload.identity"]
+  bound_claims_type = "glob"
   bound_claims = {
     sub = "organization:${var.tfc_organization}:project:*:workspace:*:run_phase:*"
   }
@@ -148,7 +148,7 @@ resource "vault_auth_backend" "approle" {
 }
 
 resource "vault_policy" "aap_ssh" {
-  name = "aap-ssh-signer"
+  name   = "aap-ssh-signer"
   policy = <<EOT
 path "ssh/sign/${var.vault_ssh_role}" {
   capabilities = ["create", "update"]
@@ -180,6 +180,9 @@ resource "vault_kv_secret_v2" "aap_creds" {
   })
 }
 
+# AppRole credentials are stored in Vault KV for reference only.
+# The role_id and secret_id are read directly from Vault by the AAP
+# custom credential (injected as env vars) — never via Terraform data sources.
 resource "vault_kv_secret_v2" "aap_approle" {
   mount = "secret"
   name  = "aap/approle"
@@ -218,7 +221,7 @@ resource "tfe_variable" "terraform_vars" {
     gcp_region          = var.gcp_region
     gcp_zone            = var.gcp_zone
     aap_hostname        = var.aap_hostname
-    aap_job_template_id = var.aap_job_template_id
+    aap_job_template_id = tostring(var.aap_job_template_id)
     environment         = var.environment
     vm_count            = tostring(var.vm_count)
   }
