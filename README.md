@@ -152,7 +152,7 @@ cd tf-actions-aap-gcp
 
 ## Implementation Steps
 
-### Step 1: Configure HCP Vault Dedicated Cluster (5 min)
+### Step 1: Configure HCP Vault Dedicated Cluster
 
 Provision or use an existing HCP Vault Dedicated cluster.
 
@@ -172,7 +172,7 @@ Terraform retrieves GCP credentials at runtime via a Vault data source and AAP c
 
 ---
 
-### Step 2: Create HCP Terraform Workspace (5 min)
+### Step 2: Create HCP Terraform Workspace
 
 Configure your workspace with VCS integration pointing to your forked repository:
 
@@ -186,7 +186,7 @@ You'll add these variables after bootstrap completes.
 
 ---
 
-### Step 3: Configure GCP (5 min)
+### Step 3: Configure GCP
 
 Enable required Google Cloud APIs and authenticate:
 
@@ -213,7 +213,7 @@ Learn more about GCP service accounts in the [GCP documentation](https://cloud.g
 
 ---
 
-### Step 4: Bootstrap Infrastructure (15 min)
+### Step 4: Bootstrap Infrastructure
 
 The bootstrap module automates all Vault, GCP, and HCP Terraform configuration.
 
@@ -315,7 +315,7 @@ The playbook is verbose by design — when troubleshooting, you need detailed lo
 
 ---
 
-### Step 6: Configure Ansible Automation Platform (20 min)
+### Step 6: Configure Ansible Automation Platform
 
 #### 6.1 Create Project
 
@@ -439,7 +439,7 @@ Workspace → Variables → aap_job_template_id → Update with ID from step 6.4
 
 ---
 
-### Step 7: Configure Dynamic Provider Credentials (5 min)
+### Step 7: Configure Dynamic Provider Credentials
 
 To configure dynamic credentials in HCP Terraform from Vault, add environment variables in the HCP Terraform workspace.
 
@@ -459,7 +459,7 @@ TFC_VAULT_BACKED_JWT_AUTH = true
 
 ---
 
-### Step 8: Provision Infrastructure with Terraform (10 min)
+### Step 8: Provision Infrastructure with Terraform
 
 First deployment creates VMs and runs initial configuration.
 
@@ -533,7 +533,7 @@ resource "terraform_data" "trigger_patch" {
 
 ---
 
-### Step 10: Testing the Automation (5 min)
+### Step 10: Testing the Automation
 
 Test the end-to-end automation:
 
