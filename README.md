@@ -771,4 +771,4 @@ The VM patching example demonstrates the core pattern, but it applies to any Day
 - [HCP Terraform documentation](https://developer.hashicorp.com/terraform/cloud-docs)
 - [HCP Vault documentation](https://developer.hashicorp.com/vault/docs)
 - [Ansible Automation Platform documentation](https://www.ansible.com/products/automation-platform)
-- [From IaC to InfraOps: Automating Day-2 Operations with Terraform Actions & Ansible - DevConf.IN 2026](https://www.youtube.com/watch?v
+- [From IaC to InfraOps: Automating Day-2 Operations with Terraform Actions & Ansible - DevConf.IN 2026](https://www.youtube.com/watch?v=_AUUM2GAk9g)
